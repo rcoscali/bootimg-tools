@@ -78,6 +78,8 @@ static const char *progusage =
   "       with the following options                                                                        \n"
   "       %s --verbose|-v <lvl>  : be verbose at runtime. <lvl> is added to current verbosity level.        \n"
   "       %s                       If omited, one is assumed. More verbose flags imply more verbosity.      \n"
+  "       %s --outdir|-o <outdir>: Save potentially big image files in the <outdir> directory               \n"
+  "       %s                       Impacted images are kernel, ramdisk, second bootloader & dtb             \n"
   "       %s --xml|-x            : generate an xml metadata file.                                           \n"
   "       %s                       This option is exclusive with json.                                      \n"
   "       %s                       Only the last one will be taken into account.                            \n"
@@ -190,12 +192,25 @@ main(int argc, char **argv)
 	  break;
 
 	case 'o':
-	  oflag = 1;
-	  free((void *)oval);
-	  oval = optarg;
-	  if (vflag)
-	    fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-		    progname, getLongOptionName(c), c, oflag);
+	  {
+	    const char * oldval = oval;
+	    oflag = 1;
+	    oval = optarg;
+	    if (oval[0] != '/')
+	      {
+		char newval[PATH_MAX];
+		if (oval[0] == '.' && oval[1] == '/')
+		  oval = &oval[2];
+		sprintf(newval, "%s/%s", oldval, oval);
+		oval = strdup(newval);
+		free((void *)oldval);
+	      }
+	    else
+	      free((void *)oldval);
+	    if (vflag)
+	      fprintf(stderr, "%s: option %s/%c (=%d) set\n",
+		      progname, getLongOptionName(c), c, oflag);
+	  }
 	  break;
 	  
 	case 'x':
@@ -797,7 +812,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 
       const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
       if (xflag)
-	xmlTextWriterWriteAttribute(xmlWriter, "ramdiskImageFile", tmpfname);
+	xmlTextWriterWriteFormatElement(xmlWriter, "ramdiskImageFile", "%s", tmpfname);
       if (jflag)
 	cJSON_AddItemToObject(jsonDoc, "ramdiskImageFile", cJSON_CreateString(tmpfname));
       free((void *)tmpfname);
@@ -815,7 +830,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 
 	  tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
 	  if (xflag)
-	    xmlTextWriterWriteAttribute(xmlWriter, "secondBootloaderImageFile", tmpfname);
+	    xmlTextWriterWriteFormatElement(xmlWriter, "secondBootloaderImageFile", "%s", tmpfname);
 	  if (jflag)
 	    cJSON_AddItemToObject(jsonDoc, "secondBootloaderImageFile", cJSON_CreateString(tmpfname));
 	  free((void *)tmpfname);
@@ -835,7 +850,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 
 	  tmpfname = getImageFilename(basename, outdir, BOOTIMG_DTB_FILENAME);
 	  if (xflag)
-	    xmlTextWriterWriteAttribute(xmlWriter, "dtbImageFile", tmpfname);
+	    xmlTextWriterWriteFormatElement(xmlWriter, "dtbImageFile", "%s", tmpfname);
 	  if (jflag)
 	    cJSON_AddItemToObject(jsonDoc, "dtbImageFile", cJSON_CreateString(tmpfname));
 	  free((void *)tmpfname);
