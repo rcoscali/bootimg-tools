@@ -6,17 +6,18 @@ BOOTIMG_CREATE_OBJS := $(BOOTIMG_CREATE_SRCS:%.c=%.o)
 BOOTIMG_LDLIBS := xml2
 BOOTIMG_LDFLAGS := 
 
+DEFINES := -D_GNU_SOURCE
 INCLUDES := -I/usr/include/libxml2
 
 CC := gcc
 ifneq ($(DEBUG),)
-CFLAGS := -g -O0 -D_GNU_SOURCE
+CFLAGS := -g -O0 
 else
-CFLAGS := -O2 -D_GNU_SOURCE
+CFLAGS := -O2
 endif
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -c $< -o $@
 
 .PHONY: all clean
 
