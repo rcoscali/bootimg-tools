@@ -30,4 +30,4 @@ bootimg-extract: $(BOOTIMG_EXTRACT_OBJS)
 	$(CC) $(CFLAGS) $(BOOTIMG_EXTRACT_OBJS) -o $@ $(BOOTIMG_LDFLAGS) $(foreach lib,$(BOOTIMG_LDLIBS),-l$(lib)) -lm
 
 bootimg-create: $(BOOTIMG_CREATE_OBJS)
-	echo $(CC) $(CFLAGS) $(BOOTIMG_CREATE_OBJS) -o $@ $(BOOTIMG_LDFLAGS) $(foreach lib,$(BOOTIMG_LDLIBS),-l$(lib)) -lm
+	$(CC) $(CFLAGS) $(BOOTIMG_CREATE_OBJS) -o $@ $(BOOTIMG_LDFLAGS) $(foreach lib,$(BOOTIMG_LDLIBS),-l$(lib)) -lm
