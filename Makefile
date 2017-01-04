@@ -10,9 +10,9 @@ INCLUDES := -I/usr/include/libxml2
 
 CC := gcc
 ifneq ($(DEBUG),)
-CFLAGS := -g -O0
+CFLAGS := -g -O0 -D_GNU_SOURCE
 else
-CFLAGS := -O2
+CFLAGS := -O2 -D_GNU_SOURCE
 endif
 
 %.o: %.c

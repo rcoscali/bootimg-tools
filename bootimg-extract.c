@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <getopt.h>
 #include <alloca.h>
 
@@ -57,11 +58,13 @@
  * - n: basename for metadata file. nflag € [0, 1]
  */
 int vflag = 0;
+int oflag = 0;
 int xflag = 0;
 int jflag = 0;
 int nflag = 0;
 int pflag = 0;
 char *nval = (char *)NULL;
+char *oval = (char *)NULL;
 size_t pval = 0L;
 char *progname = (char *)NULL;
 char *blankname = (char *)NULL;
@@ -69,7 +72,7 @@ off_t kernel_offset = 0x00008000;
 size_t base_addr = 0; 
 
 static const char *progusage =
-  "usage: %s [--verbose[=<lvl>] ...] [--xml] [--json] [--name=<basename>] [--pagesize=<pgsz>] imgfile1 [imgfile2 ...]\n"
+  "usage: %s --verbose[=<lvl>] ...] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] imgfile1 [imgfile2 ...]\n"
   "       %s --help                                                                                         \n"
   "                                                                                                         \n"
   "       with the following options                                                                        \n"
@@ -89,15 +92,16 @@ static const char *progusage =
  * Long options
  */
 struct option long_options[] = {
+  {"verbose",  optional_argument, 0,  'v' },
+  {"outdir",   required_argument, 0,  'o' },
   {"name",     required_argument, 0,  'n' },
   {"xml",      no_argument,       0,  'x' },
   {"json",     no_argument,       0,  'j' },
-  {"verbose",  optional_argument, 0,  'v' },
   {"pagesize", required_argument, 0,  'p' },
   {"help",     no_argument,       0,  'h' },
   {0,          0,                 0,   0  }
 };
-
+#define BOOTIMG_OPTSTRING "v::o:n:xjh:"
 const char *unknown_option = "????";
 
 /*
@@ -109,16 +113,16 @@ extern int optind, opterr, optopt;
 /*
  * Forward decl
  */
-int extractBootImageMetadata(const char *);
+int extractBootImageMetadata(const char *, const char *);
 void printusage(void);
 const char *getLongOptionName(char);
 boot_img_hdr *findBootMagic(FILE *, boot_img_hdr *, off_t *);
 int readPadding(FILE*, unsigned, int);
-const char *getImageFilename(const char *, int);
-size_t extractKernelImage(FILE *, boot_img_hdr *, const char *);
-size_t extractRamdiskImage(FILE *, boot_img_hdr *, const char *);
-size_t extractSecondBootloaderImage(FILE *, boot_img_hdr *, const char *);
-size_t extractDeviceTreeImage(FILE *, boot_img_hdr *, const char *);
+const char *getImageFilename(const char *, const char *, int);
+size_t extractKernelImage(FILE *, boot_img_hdr *, const char *, const char *);
+size_t extractRamdiskImage(FILE *, boot_img_hdr *, const char *, const char *);
+size_t extractSecondBootloaderImage(FILE *, boot_img_hdr *, const char *, const char *);
+size_t extractDeviceTreeImage(FILE *, boot_img_hdr *, const char *, const char *);
 
 void *
 my_malloc_fn(size_t sz)
@@ -151,6 +155,7 @@ main(int argc, char **argv)
   blankname = (char *)alloca(strlen(progname) +1);
   blankname[strlen(progname) +1] = 0;
   memset((void *)blankname, (int)' ', (size_t)strlen(progname));
+  oval = get_current_dir_name();
   
   /*
    * This initialize the libxml2 library and check potential ABI
@@ -167,7 +172,7 @@ main(int argc, char **argv)
       int this_option_optind = optind ? optind : 1;
       int option_index = 0;
       
-      c = getopt_long(argc, argv, "n:xjv::h:",
+      c = getopt_long(argc, argv, BOOTIMG_OPTSTRING,
 		      long_options, &option_index);
       if (c == -1)
 	break;
@@ -184,6 +189,15 @@ main(int argc, char **argv)
 		    progname, getLongOptionName(c), c, vflag);
 	  break;
 
+	case 'o':
+	  oflag = 1;
+	  free((void *)oval);
+	  oval = optarg;
+	  if (vflag)
+	    fprintf(stderr, "%s: option %s/%c (=%d) set\n",
+		    progname, getLongOptionName(c), c, oflag);
+	  break;
+	  
 	case 'x':
 	  xflag = 1;
 	  if (vflag > 3)
@@ -238,7 +252,7 @@ main(int argc, char **argv)
 	/* 
 	 *
 	 */
-	extractBootImageMetadata(argv[optind++]);
+	extractBootImageMetadata(argv[optind++], oval);
 
       /*
        * Cleanup function for the XML library.
@@ -284,7 +298,7 @@ printusage(void)
 }
 
 const char *
-getImageFilename(const char *basename, int kind)
+getImageFilename(const char *basename, const char *outdir, int kind)
 {
   char pathname[PATH_MAX];
 
@@ -302,29 +316,28 @@ getImageFilename(const char *basename, int kind)
 	fprintf(stdout, "%s: JSON Metadata filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_KERNEL_FILENAME:
-      sprintf(pathname, "%s.img", basename);
+      sprintf(pathname, "%s/%s.img", outdir, basename);
       if (vflag > 2)
 	fprintf(stdout, "%s: KERNEL filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_RAMDISK_FILENAME:
-      sprintf(pathname, "%s.cpio.gz", basename);
+      sprintf(pathname, "%s/%s.cpio.gz", outdir, basename);
       if (vflag > 2)
 	fprintf(stdout, "%s: RAMDISK filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_SECOND_LOADER_FILENAME:
-      sprintf(pathname, "%s-2ndldr.img", basename);
+      sprintf(pathname, "%s/%s-2ndldr.img", outdir, basename);
       if (vflag > 2)
 	fprintf(stdout, "%s: 2nd BOOTLOADER filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_DTB_FILENAME:
-      sprintf(pathname, "%s.dtb", basename);
+      sprintf(pathname, "%s/%s.dtb", outdir, basename);
       if (vflag > 2)
 	fprintf(stdout, "%s: DTB filename = '%s'\n", progname, pathname);
       break;
     default:
       sprintf(pathname, "%s-unknown.dat", basename);
-      if (vflag > 2)
-	fprintf(stdout, "%s: Unknown filename = '%s'\n", progname, pathname);
+      fprintf(stderr, "%s: error: Unknown filename = '%s'\n", progname, pathname);
       break;
     }
   
@@ -335,10 +348,10 @@ getImageFilename(const char *basename, int kind)
 }
 
 size_t
-extractKernelImage(FILE *fp, boot_img_hdr *hdr, const char *basename)
+extractKernelImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *basename)
 {
   size_t readsz = 0;
-  const char *filename = getImageFilename(basename, BOOTIMG_KERNEL_FILENAME);
+  const char *filename = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
   FILE *k = fopen(filename, "wb");
   
   if (k)
@@ -365,10 +378,10 @@ extractKernelImage(FILE *fp, boot_img_hdr *hdr, const char *basename)
 }
 
 size_t
-extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *basename)
+extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *basename)
 {
   size_t readsz = 0;
-  const char *filename = getImageFilename(basename, BOOTIMG_RAMDISK_FILENAME);
+  const char *filename = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
   FILE *r = fopen(filename, "wb");
 
   if (r)
@@ -395,10 +408,10 @@ extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *basename)
 }
 
 size_t
-extractSecondBootloaderImage(FILE *fp, boot_img_hdr *hdr, const char *basename)
+extractSecondBootloaderImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *basename)
 {
   size_t readsz = 0;
-  const char *filename = getImageFilename(basename, BOOTIMG_SECOND_LOADER_FILENAME);
+  const char *filename = getImageFilename(basename, outdir, BOOTIMG_SECOND_LOADER_FILENAME);
   FILE *s = fopen(filename, "wb");
 
   if (s)
@@ -425,10 +438,10 @@ extractSecondBootloaderImage(FILE *fp, boot_img_hdr *hdr, const char *basename)
 }
 
 size_t
-extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *basename)
+extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *basename)
 {
   size_t readsz = 0;
-  const char *filename = getImageFilename(basename, BOOTIMG_DTB_FILENAME);
+  const char *filename = getImageFilename(basename, outdir, BOOTIMG_DTB_FILENAME);
   FILE *d = fopen(filename, "wb");
 
   if (d)
@@ -455,7 +468,7 @@ extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *basename)
 }
 
 int
-extractBootImageMetadata(const char *imgfile)
+extractBootImageMetadata(const char *imgfile, const char *outdir)
 {
   boot_img_hdr header, *hdr = (boot_img_hdr *)NULL;
   FILE *imgfp = (FILE *)NULL, *xfp = (FILE *)NULL, *jfp = (FILE *)NULL;
@@ -485,13 +498,14 @@ extractBootImageMetadata(const char *imgfile)
 	fprintf(stdout, "%s: Magic found at offset %ld in file '%s'\n", progname, offset, imgfile);
       
       base_addr = hdr->kernel_addr - kernel_offset;
-      
+
+      /* Create & start XML metadata file */
       if (xflag)
 	do
 	  {
 	    int rc;
 	    
-	    xml_filename = getImageFilename(basename, BOOTIMG_XML_FILENAME);
+	    xml_filename = getImageFilename(basename, outdir, BOOTIMG_XML_FILENAME);
 	    xmlWriter = xmlNewTextWriterDoc(&xmlDoc, 0);
 	    if (xmlWriter == NULL)
 	      {
@@ -520,13 +534,16 @@ extractBootImageMetadata(const char *imgfile)
 		xml_filename = (const char *)NULL;
 		break;
 	      }
+	    const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
+	    xmlTextWriterWriteAttribute(xmlWriter, "bootImageFile", tmpfname);
+	    free((void *)tmpfname);
 	  }
 	while (0);
       
       if (jflag)
 	do
 	  {
-	    json_filename = getImageFilename(basename, BOOTIMG_JSON_FILENAME);
+	    json_filename = getImageFilename(basename, outdir, BOOTIMG_JSON_FILENAME);
 	    jfp = fopen(json_filename, "wb");
 	    if (!jfp)
 	      {
@@ -541,6 +558,9 @@ extractBootImageMetadata(const char *imgfile)
 		jfp = (FILE *)NULL;
 		break;		
 	      }
+	    const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
+	    cJSON_AddItemToObject(jsonDoc, "bootImageFile", cJSON_CreateString(tmpfname));
+	    free((void *)tmpfname);	    
 	  }
 	while(0);
       
@@ -760,7 +780,7 @@ extractBootImageMetadata(const char *imgfile)
       total_read += sizeof(header);
       total_read += readPadding(imgfp, sizeof(header), pval);
 	  
-      size_t kernel_sz = extractKernelImage(imgfp, hdr, basename);
+      size_t kernel_sz = extractKernelImage(imgfp, hdr, outdir, basename);
       if (vflag && kernel_sz)
 	{
 	  fprintf(stdout, "%s: %lu bytes kernel image extracted!\n", progname, kernel_sz);
@@ -769,14 +789,36 @@ extractBootImageMetadata(const char *imgfile)
       total_read += hdr->kernel_size;
       total_read += readPadding(imgfp, hdr->kernel_size, pval);
 
-      extractRamdiskImage(imgfp, hdr, basename);
+      size_t ramdisk_sz = extractRamdiskImage(imgfp, hdr, outdir, basename);
+      if (vflag && ramdisk_sz)
+	{
+	  fprintf(stdout, "%s: %lu bytes ramdisk image extracted!\n", progname, ramdisk_sz);
+	}
+
+      const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
+      if (xflag)
+	xmlTextWriterWriteAttribute(xmlWriter, "ramdiskImageFile", tmpfname);
+      if (jflag)
+	cJSON_AddItemToObject(jsonDoc, "ramdiskImageFile", cJSON_CreateString(tmpfname));
+      free((void *)tmpfname);
 
       total_read += hdr->ramdisk_size;
       total_read += readPadding(imgfp, hdr->ramdisk_size, pval);
 
       if (hdr->second_size)
 	{
-	  extractSecondBootloaderImage(imgfp, hdr, basename);
+	  size_t second_sz = extractSecondBootloaderImage(imgfp, hdr, outdir, basename);
+	  if (vflag && second_sz)
+	    {
+	      fprintf(stdout, "%s: %lu bytes second bootloader image extracted!\n", progname, second_sz);
+	    }
+
+	  tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
+	  if (xflag)
+	    xmlTextWriterWriteAttribute(xmlWriter, "secondBootloaderImageFile", tmpfname);
+	  if (jflag)
+	    cJSON_AddItemToObject(jsonDoc, "secondBootloaderImageFile", cJSON_CreateString(tmpfname));
+	  free((void *)tmpfname);
 
 	  total_read += hdr->second_size;
 	}
@@ -785,7 +827,19 @@ extractBootImageMetadata(const char *imgfile)
 
       if (hdr->dt_size != 0)
 	{
-	  extractDeviceTreeImage(imgfp, hdr, basename);
+	  size_t dtb_sz = extractDeviceTreeImage(imgfp, hdr, outdir, basename);
+	  if (vflag && dtb_sz)
+	    {
+	      fprintf(stdout, "%s: %lu bytes device tree binary image extracted!\n", progname, dtb_sz);
+	    }
+
+	  tmpfname = getImageFilename(basename, outdir, BOOTIMG_DTB_FILENAME);
+	  if (xflag)
+	    xmlTextWriterWriteAttribute(xmlWriter, "dtbImageFile", tmpfname);
+	  if (jflag)
+	    cJSON_AddItemToObject(jsonDoc, "dtbImageFile", cJSON_CreateString(tmpfname));
+	  free((void *)tmpfname);
+
 	  total_read += hdr->dt_size;
 	}
 
