@@ -1,4 +1,4 @@
-/* bootimg-tools/bootimg.h
+/* bootimg-tools/bootimg-extract.c
  *
  * Copyright 2007, The Android Open Source Project
  *
@@ -51,10 +51,17 @@
   "os_patch_level & 0xf"
 
 /*
+ * TODO
+ * Some comments for others fields of image are missing
+ */
+
+/*
  * Options flags & values
  * - v: verbose. vflag € N+*
+ * - o: outdir. oflag € [0, 1]
  * - x: xml metadata file. xflag € [0, 1]
  * - j: json metadata file. jflag € [0, 1]
+ * - p: page size. pflag € [0, 1]
  * - n: basename for metadata file. nflag € [0, 1]
  */
 int vflag = 0;
@@ -63,11 +70,25 @@ int xflag = 0;
 int jflag = 0;
 int nflag = 0;
 int pflag = 0;
+
+/* nval: basename */
 char *nval = (char *)NULL;
+/* oval: outdir */
 char *oval = (char *)NULL;
+/* pval: pagesize */
 size_t pval = 0L;
+
+/*
+ * progname & blankname are program name and space string with progname size
+ * for displaying messsages and help
+ */
 char *progname = (char *)NULL;
 char *blankname = (char *)NULL;
+
+/*
+ * Kernel offset is 0x8000
+ * then base addr is calculated with kernel_addr - offset;
+ */
 off_t kernel_offset = 0x00008000;
 size_t base_addr = 0; 
 
@@ -126,12 +147,18 @@ size_t extractRamdiskImage(FILE *, boot_img_hdr *, const char *, const char *);
 size_t extractSecondBootloaderImage(FILE *, boot_img_hdr *, const char *, const char *);
 size_t extractDeviceTreeImage(FILE *, boot_img_hdr *, const char *, const char *);
 
+/*
+ * Used for cJSON allocations
+ */
 void *
 my_malloc_fn(size_t sz)
 {
   return malloc(sz);
 }
 
+/*
+ * Used for cJSON allocations
+ */
 void
 my_free_fn(void *ptr)
 {
@@ -285,6 +312,9 @@ main(int argc, char **argv)
   return(0);
 }
 
+/*
+ * Print usage message
+ */
 void
 printusage(void)
 {
@@ -312,6 +342,9 @@ printusage(void)
   free((void *)str);
 }
 
+/*
+ * Return an image file name
+ */
 const char *
 getImageFilename(const char *basename, const char *outdir, int kind)
 {
@@ -362,6 +395,9 @@ getImageFilename(const char *basename, const char *outdir, int kind)
   return strdup(pathname);
 }
 
+/*
+ * Extract the kernel image in a file
+ */
 size_t
 extractKernelImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *basename)
 {
@@ -392,6 +428,9 @@ extractKernelImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *
   return(readsz);
 }
 
+/*
+ * Extract the ramdisk image in a file
+ */
 size_t
 extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *basename)
 {
@@ -422,6 +461,9 @@ extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char 
   return(readsz);
 }
 
+/*
+ * Extract the 2nd bootloader image in a file
+ */
 size_t
 extractSecondBootloaderImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *basename)
 {
@@ -452,6 +494,9 @@ extractSecondBootloaderImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, co
   return(readsz);
 }
 
+/*
+ * Extract the DTB image in a file
+ */
 size_t
 extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *basename)
 {
@@ -482,6 +527,9 @@ extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const ch
   return(readsz);
 }
 
+/*
+ * Process an image file and extract metadata & images 
+ */
 int
 extractBootImageMetadata(const char *imgfile, const char *outdir)
 {
@@ -554,7 +602,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 	    free((void *)tmpfname);
 	  }
 	while (0);
-      
+
+      /* Create and start JSON metadata file */
       if (jflag)
 	do
 	  {
@@ -578,7 +627,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 	    free((void *)tmpfname);	    
 	  }
 	while(0);
-      
+
+      /* Have we at least one metadata file to create */
       if (!jfp && !xml_filename)
 	{
 	  fprintf(stderr, "%s: error: cannot save metadata %s%s%s%s!\n",
@@ -614,32 +664,41 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 	  	  
 	  sprintf(boardOsVersionStr, "%d.%d.%d", major, minor, micro);
 	  sprintf(boardOsPatchLvlStr, "%d-%02d", year, month);
-	  
+
+	  /* If xml is requested */
 	  if (xflag)
 	    do
 	      {
+		/* cmdLine */
 		if (xmlTextWriterWriteFormatElement(xmlWriter, "cmdLine", "%s", hdr->cmdline) < 0)
 		  fprintf(stderr, "%s: error: cannot create xml element for cmdLine\n", progname);
 		
+		/* boardName */
 		if (xmlTextWriterWriteFormatElement(xmlWriter, "boardName", "%s", hdr->name) < 0)
 		  fprintf(stderr, "%s: error: cannot create xml element for boardName\n", progname);
-		
+
+		/* baseAddr */
 		if (xmlTextWriterWriteFormatElement(xmlWriter, "baseAddr", "0x%08lx", base_addr) < 0)
 		  fprintf(stderr, "%s: error: cannot create xml element for baseAddr\n", progname);
 		
+		/* pageSize */
 		if (xmlTextWriterWriteFormatElement(xmlWriter, "pageSize", "%d", hdr->page_size) < 0)
 		  fprintf(stderr, "%s: error: cannot create xml element for pageSize\n", progname);
-		
+
+		/* kernelOffset */
 		if (xmlTextWriterWriteFormatElement(xmlWriter, "kernelOffset", "0x%08lx", hdr->kernel_addr - base_addr) < 0)
 		  fprintf(stderr, "%s: error: cannot create xml element for kernelOffset\n", progname);
 		
+		/* ramdiskOffset */
 		if (xmlTextWriterWriteFormatElement(xmlWriter, "ramdiskOffset", "0x%08lx", hdr->ramdisk_addr - base_addr) < 0)
 		  fprintf(stderr, "%s: error: cannot create xml element for ramdiskOffset\n", progname);
 		
+		/* secondOffset */
 		if (hdr->second_size != 0 &&
-		    xmlTextWriterWriteFormatElement(xmlWriter, "ramdiskOffset", "0x%08lx", hdr->second_addr - base_addr) < 0)
+		    xmlTextWriterWriteFormatElement(xmlWriter, "secondOffset", "0x%08lx", hdr->second_addr - base_addr) < 0)
 		  fprintf(stderr, "%s: error: cannot create xml element for secondBootloaderSize\n", progname);
-		
+
+		/* tagsOffset */
 		if (xmlTextWriterWriteFormatElement(xmlWriter, "tagsOffset", "0x%08lx", hdr->tags_addr - base_addr) < 0)
 		  fprintf(stderr, "%s: error: cannot create xml element for tagsOffset\n", progname);
 		
