@@ -72,6 +72,8 @@ struct ptentry {
  * 6. if second_size != 0: jump to second_addr
  *    else: jump to kernel_addr
  */
+
+typedef unsigned char byte;
 typedef struct boot_img_hdr boot_img_hdr;
 
 #define BOOT_MAGIC "ANDROID!"
