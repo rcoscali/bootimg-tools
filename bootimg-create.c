@@ -109,6 +109,7 @@ extern int optind, opterr, optopt;
 /*
  * Forward decl
  */
+void printusage(void);
 
 
 /*
@@ -243,4 +244,76 @@ main(int argc, char **argv)
 	  fprintf(stderr, "%s: getopt returned character code 0%o ??\n", progname, c);
 	}
     }
+
+  if (xflag && jflag)
+    {
+      fprintf(stderr, "%s: error: options x and j are mutually exclusive !\n", progname);
+      printusage();
+      exit(1);
+    }
+  
+  if (vflag > 3)
+    {
+      fprintf(stderr, "%s: optind = %d\n", progname, optind);
+      fprintf(stderr, "%s: argc = %d\n", progname, argc);
+    }
+
+  if (optind < argc)
+    {
+      if (optind != argc -1 && !fflag)
+	{
+	  fprintf(stderr, "%s: warning: You provided several image to create to the same image file ?");
+	  fprintf(stderr, "%s: warning: Stop processing as the force flag was not provided")
+	}
+      while (optind < argc)
+	/* 
+	 *
+	 */
+	createBootImageMetadata(argv[optind++], oval);
+
+      /*
+       * Cleanup function for the XML library.
+       */
+      xmlCleanupParser();
+      exit(0);
+    }
+  else
+    {
+      fprintf(stderr, "%s: error: No image file provided !\n", progname);
+      printusage();
+      exit (1);
+    }
+
+  return(0);  
 }
+
+/*
+ * Print usage message
+ */
+void
+printusage(void)
+{
+  char line[256];
+  char *tok = (char *)NULL;
+  char twolines = 2;
+
+  char *str = (char *)malloc(strlen(progusage) +1);
+  memcpy(str, progusage, strlen(progusage) +1);
+  
+  while ((tok = strtok((char *)str, "\n")) != (char *)NULL)
+    {
+      if (twolines)
+	{
+	  sprintf(line, tok, progname);
+	  twolines--;
+	}
+      else
+	sprintf(line, tok, blankname);
+
+      str = (char *)NULL;
+      fprintf(stdout, "%s\n", line);
+    }
+
+  free((void *)str);
+}
+
