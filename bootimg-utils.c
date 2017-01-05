@@ -20,31 +20,21 @@
 #include <string.h>
 #include <strings.h>
 #include <getopt.h>
+#include <alloca.h>
 
 #include "bootimg.h"
 #include "bootimg-priv.h"
 
-/* Verbosity flag (from command line options) */
-extern int vflag;
-extern char *progname;
-extern struct option *long_options;
-extern const char *unknown_option;
-
 /*
  * Retrieve long option name from short name
  */
-const char *
+inline const char *
 getLongOptionName(char option)
 {
-  struct option *opt;
-
-  opt = long_options;
-  while (opt)
-    {
-      if (opt->val == option)
-	return opt->name;
-      opt++;
-    }
+  extern struct option *long_options;
+  struct option *opt = long_options;
+  do if (opt->val == option) return opt->name; while (++opt);
+  extern const char *unknown_option;
   return unknown_option;
 }
 
@@ -54,10 +44,15 @@ getLongOptionName(char option)
 const char *
 getImageFilename(const char *basename, const char *outdir, int kind)
 {
-  char pathname[PATH_MAX];
+  /* Verbosity flag (from command line options) */
+  extern int vflag;
+  extern char *progname;
+  char *pathname;
 
-  bzero((void *)pathname, PATH_MAX);
-  
+  /* Allocate & Zero memory */
+  pathname = alloca(PATH_MAX+1);
+  bzero((void *)pathname, PATH_MAX+1);  
+  /* First handle extension */
   switch (kind)
     {
       /* strip extension for boot image files */
@@ -69,7 +64,7 @@ getImageFilename(const char *basename, const char *outdir, int kind)
       if (strrchr(basename, '.'))
 	*(strrchr(basename, '.')) = '_';
     }
-  
+  /* Then create file pathname according to its type */
   switch (kind)
     {
     case BOOTIMG_BOOTIMG_FILENAME:
