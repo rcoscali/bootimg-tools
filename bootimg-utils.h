@@ -18,6 +18,10 @@
 #ifndef __BOOTIMG_UTILS_H__
 #define __BOOTIMG_UTILS_H__
 
+#include "bootimg.h"
+
+boot_img_hdr *initBootImgHeader(boot_img_hdr *);
+const char *getLongOptionName(char);
 const char *getImageFilename(const char *, const char *, int);
 
 #endif /* __BOOTIMG_UTILS_H__ */
