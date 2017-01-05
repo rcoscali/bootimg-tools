@@ -22,11 +22,14 @@
 #include <getopt.h>
 #include <alloca.h>
 
-//#include <libxml/encoding.h>
-//#include <libxml/xmlwriter.h>
+#include <libxml/xmlreader.h>
 
 #include "bootimg.h"
 #include "cJSON.h"
+
+#ifdef LIBXML_READER_ENABLED
+
+#include "bootimg-priv.h"
 
 /*
  * Options flags & values
@@ -110,6 +113,8 @@ extern int optind, opterr, optopt;
  * Forward decl
  */
 void printusage(void);
+void createBootImageFromXmlMetadata(const char *, const char *);
+void createBootImageFromJsonMetadata(const char *, const char *);
 
 
 /*
@@ -269,7 +274,7 @@ main(int argc, char **argv)
 	/* 
 	 *
 	 */
-	createBootImageMetadata(argv[optind++], oval);
+	createBootImageFromXmlMetadata(argv[optind++], oval);
 
       /*
        * Cleanup function for the XML library.
@@ -317,3 +322,166 @@ printusage(void)
   free((void *)str);
 }
 
+/*
+ * getImageFilename
+ */
+
+/*
+ * createBootImageFromXmlMetadata
+ */
+void 
+createBootImageFromXmlMetadata(const char *filename, const char *outdir)
+{
+  xmlTextReaderPtr xmlReader;
+  xmlDocPtr xmlDoc;
+  const char *pathname = getImageFilename(outdir, filename, kind);
+
+  xmlReader = xmlReaderForFile(pathname, NULL, 0);
+  if (xmlReader == (xmlTextReaderPtr)NULL)
+    fprintf(stderr, "%s: error: cannot create xml reader for '%s'!\n", progname, pathname);
+
+  else
+    {
+      /* Parse document */
+      
+      /* Cleanup xml parser */
+      xmlDoc = xmlTextReaderCurrentDoc(xmlReader);
+      if (xmlDoc != (xmlDocPtr)NULL)
+	xmlFreeDoc(xmlDoc);
+
+      xmlFreeTextReader(xmlReader);
+    }
+}
+
+/*
+ * createBootImageFromJsonMetadata
+ */
+void 
+createBootImageFromJsonMetadata(const char *filename, const char *outdir)
+{
+  FILE *jfp = NULL;
+  const char *pathname = getImageFilename(outdir, filename, kind);
+
+  jfp = fopen(pathname, "rb");
+  if (jfp == NULL)
+    fprintf(stderr, "%s: error: cannot open json file '%s' for reading!\n", progname, pathname);
+
+  else
+    {
+      size_t json_sz;
+      char *buf = (char *)NULL;
+
+      /* Get size of json file */
+      rewind(jfp);
+      json_sz = ftell(jfp);
+
+      /* Alloc mem for storing json data */
+      buf = (char *)malloc(json_sz * sizeof(char));
+      if (buf == (char *)NULL)
+	{
+	  /* Failed! cleanup */
+	  fprintf(stderr,
+		  "%s: error: cannot allocate %ld bytes for reading '%s'!\n",
+		  progname, json_sz, pathname);
+	  fclose(jfp);
+	}
+      
+      else
+	{
+	  /* Ok. Read data ... */
+	  size_t rdsz = fread((void *)buf, json_sz, 1, jfp);
+	  if (rdsz != 1)
+	    {
+	      /* Failed! cleanup */
+	      fprintf(stderr,
+		      "%s: error: expected '%lu' bytes but read '%lu' bytes from '%s'!\n",
+		      progname, json_sz, json_sz * rdsz, pathname);
+	      free((void *)buf);
+	      fclose(jfp);	      
+	    }
+
+	  else
+	    {
+	      FILE *imgfp = (FILE *)NULL;
+	      boot_img_hdr header, *hdr;
+
+	      /* Cleanup some resources we don't need anymore */
+	      fclose(jfp);	      		  
+
+	      /* init header struct */
+	      hdr = initBootImgHeader(&header);
+	      
+	      /* Ok. Parse json data in a json doc for usage. */
+	      cJSON *jsonDoc = cJSON_Parse(buf);
+
+	      /* Release json data buffer memory */
+	      free((void *)buf);
+
+	      do
+		{
+		  /* First get the boot.img file pathname */
+		  cJSON *jsonBootImageFile = cJSON_GetObjectItem(jsonDoc, "bootImageFile");
+		  const char *bootImageFile = stdrup(jsonBootImageFile->valuestring);
+		  if (bootImageFile == (char *)NULL)
+		    {
+		      fprintf(stderr,
+			      "%s: error: cannot allocate memory for boot image file pathname!\n",
+			      progname);
+		      break;
+		    }
+		  cJSON_Delete(jsonBootImageFile);
+		  jsonBootImageFile = (cJSON *)NULL;
+
+		  /*
+		   * TODO
+		   * get all fields from json doc and set them in header struct
+		   */
+		  
+		  /* Open image file */
+		  imgfp = fopen(bootImageFile, "wb");
+		  if (imgfp = (FILE *)NULL)
+		    {
+		      /* Failed! cleanup */
+		      fprintf(stderr,
+			      "%s: error: cannot open boot image file '%s' for writing!\n",
+			      progname, bootImageFile);
+		      break;
+		    }
+
+		  size_t wrsz = fwrite(hdr, sizeof(boot_img_hdr), 1, imgfp);
+		  if (wrsz != 1)
+		    {
+		      fprintf(stderr,
+			      "%s: error: expected %lu bytes, wrote %lu: cannot write boot image to file '%s'!\n",
+			      progname, sizeof(boot_img_hdr), wrsz * sizeof(boot_img_hdr), bootImageFile);
+		      break;
+		    }
+
+		  if (fflush(imgfp))
+		    {
+		      fprintf(stderr,
+			      "%s: error: couldn't flush boot image file!\n",
+			      progname);
+		      break;
+		    }
+		}
+	      while (0);
+
+	      /* 
+	       * cleanup 
+	       */
+	      if (imgfp)
+		fclose(imgfp);
+	      imgfp = (FILE *)NULL;
+
+	      if (bootImageFile)
+		free((void *)bootImageFile);
+	      bootImageFile = (char *)NULL;
+
+	      if (jsonBootImageFile)
+		cJSON_Delete(jsonBootImageFile);
+	      jsonBootImageFile = (cJSON *)NULL;
+	    }
+	}
+    }
+}
