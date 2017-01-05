@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <unistd.h>
+#include <unistd.h>
 #include <getopt.h>
 #include <alloca.h>
 
@@ -30,6 +30,7 @@
 #ifdef LIBXML_READER_ENABLED
 
 #include "bootimg-priv.h"
+#include "bootimg-utils.h"
 
 /*
  * Options flags & values
@@ -46,6 +47,7 @@ int xflag = 0;
 int jflag = 0;
 int nflag = 0;
 int pflag = 0;
+int fflag = 0;
 
 /* nval: basename */
 char *nval = (char *)NULL;
@@ -69,10 +71,11 @@ off_t kernel_offset = 0x00008000;
 size_t base_addr = 0; 
 
 static const char *progusage =
-  "usage: %s --verbose[=<lvl>] ...] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] imgfile1 [imgfile2 ...]\n"
+  "usage: %s --verbose[=<lvl>] ...] [--force] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] imgfile1 [imgfile2 ...]\n"
   "       %s --help                                                                                         \n"
   "                                                                                                         \n"
   "       with the following options                                                                        \n"
+  "       %s --force|-f          : force files overwrite.                                                   \n"
   "       %s --verbose|-v <lvl>  : be verbose at runtime. <lvl> is added to current verbosity level.        \n"
   "       %s                       If omited, one is assumed. More verbose flags imply more verbosity.      \n"
   "       %s --outdir|-o <outdir>: Save potentially big image files in the <outdir> directory               \n"
@@ -92,6 +95,7 @@ static const char *progusage =
  */
 struct option long_options[] = {
   {"verbose",  optional_argument, 0,  'v' },
+  {"force",    no_argument,       0,  'f' },
   {"outdir",   required_argument, 0,  'o' },
   {"name",     required_argument, 0,  'n' },
   {"xml",      no_argument,       0,  'x' },
@@ -100,7 +104,7 @@ struct option long_options[] = {
   {"help",     no_argument,       0,  'h' },
   {0,          0,                 0,   0  }
 };
-#define BOOTIMG_OPTSTRING "v::o:n:xjh:"
+#define BOOTIMG_OPTSTRING "v::fo:n:xjh:"
 const char *unknown_option = "????";
 
 /*
@@ -267,14 +271,26 @@ main(int argc, char **argv)
     {
       if (optind != argc -1 && !fflag)
 	{
-	  fprintf(stderr, "%s: warning: You provided several image to create to the same image file ?");
-	  fprintf(stderr, "%s: warning: Stop processing as the force flag was not provided")
+	  fprintf(stderr,
+		  "%s: warning: You provided several image to create to the same image file ?",
+		  progname);
+	  fprintf(stderr,
+		  "%s: warning: Stop processing as the force flag was not provided",
+		  progname);
 	}
+      
       while (optind < argc)
-	/* 
-	 *
-	 */
-	createBootImageFromXmlMetadata(argv[optind++], oval);
+	{
+	  /* 
+	   * Create image from metadata file according to its type
+	   */
+	  /* Ptr arithm: check filename ends with .xml */
+	  if (strstr(argv[optind], ".xml") == (argv[optind] + strlen(argv[optind]) - 4))
+	    createBootImageFromXmlMetadata(argv[optind++], oval);
+
+	  if (strstr(argv[optind], ".json") == (argv[optind] + strlen(argv[optind]) - 5))
+	    createBootImageFromJsonMetadata(argv[optind++], oval);
+	}
 
       /*
        * Cleanup function for the XML library.
@@ -334,7 +350,7 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
 {
   xmlTextReaderPtr xmlReader;
   xmlDocPtr xmlDoc;
-  const char *pathname = getImageFilename(outdir, filename, kind);
+  const char *pathname = getImageFilename(outdir, filename, BOOTIMG_XML_FILENAME);
 
   xmlReader = xmlReaderForFile(pathname, NULL, 0);
   if (xmlReader == (xmlTextReaderPtr)NULL)
@@ -343,6 +359,11 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
   else
     {
       /* Parse document */
+      do
+	{
+	  /* TODO: go on ... */
+	}
+      while (0);
       
       /* Cleanup xml parser */
       xmlDoc = xmlTextReaderCurrentDoc(xmlReader);
@@ -360,7 +381,7 @@ void
 createBootImageFromJsonMetadata(const char *filename, const char *outdir)
 {
   FILE *jfp = NULL;
-  const char *pathname = getImageFilename(outdir, filename, kind);
+  const char *pathname = getImageFilename(outdir, filename, BOOTIMG_JSON_FILENAME);
 
   jfp = fopen(pathname, "rb");
   if (jfp == NULL)
@@ -402,6 +423,8 @@ createBootImageFromJsonMetadata(const char *filename, const char *outdir)
 
 	  else
 	    {
+	      cJSON *jsonBootImageFile = (cJSON *)NULL;
+	      const char *bootImageFile = (const char *)NULL;
 	      FILE *imgfp = (FILE *)NULL;
 	      boot_img_hdr header, *hdr;
 
@@ -421,7 +444,7 @@ createBootImageFromJsonMetadata(const char *filename, const char *outdir)
 		{
 		  /* First get the boot.img file pathname */
 		  cJSON *jsonBootImageFile = cJSON_GetObjectItem(jsonDoc, "bootImageFile");
-		  const char *bootImageFile = stdrup(jsonBootImageFile->valuestring);
+		  const char *bootImageFile = strdup(jsonBootImageFile->valuestring);
 		  if (bootImageFile == (char *)NULL)
 		    {
 		      fprintf(stderr,
@@ -485,3 +508,5 @@ createBootImageFromJsonMetadata(const char *filename, const char *outdir)
 	}
     }
 }
+
+#endif /* LIBXML_READER_ENABLED */
