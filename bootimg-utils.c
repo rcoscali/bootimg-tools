@@ -16,11 +16,37 @@
  */
 
 #include <stdio.h>
+#include <values.h>
+#include <string.h>
+#include <strings.h>
+#include <getopt.h>
 
 #include "bootimg.h"
+#include "bootimg-priv.h"
 
 /* Verbosity flag (from command line options) */
 extern int vflag;
+extern char *progname;
+extern struct option *long_options;
+extern const char *unknown_option;
+
+/*
+ * Retrieve long option name from short name
+ */
+const char *
+getLongOptionName(char option)
+{
+  struct option *opt;
+
+  opt = long_options;
+  while (opt)
+    {
+      if (opt->val == option)
+	return opt->name;
+      opt++;
+    }
+  return unknown_option;
+}
 
 /*
  * Return an image file name
@@ -85,7 +111,7 @@ initBootImgHeader(boot_img_hdr *hdr)
   bzero(hdr, sizeof(boot_img_hdr));
 
   /* Init MAGIC value to "ANDROID!" */
-  memset(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE);
+  memcpy((void *)hdr->magic, (const void *)BOOT_MAGIC, BOOT_MAGIC_SIZE);
   
   return hdr;
 }
