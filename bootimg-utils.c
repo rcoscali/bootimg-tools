@@ -28,8 +28,8 @@
 /*
  * Retrieve long option name from short name
  */
-inline const char *
-getLongOptionName(char option)
+const char *
+getLongOptionName(char option) 
 {
   extern struct option *long_options;
   struct option *opt = long_options;
@@ -128,3 +128,8 @@ initBootImgHeader(boot_img_hdr *hdr)
   
   return hdr;
 }
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */

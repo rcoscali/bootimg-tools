@@ -10,10 +10,11 @@ DEFINES := -D_GNU_SOURCE
 INCLUDES := -I/usr/include/libxml2
 
 CC := gcc
+CFLAGS := -std=gnu11
 ifneq ($(DEBUG),)
-CFLAGS := -g -O0 
+CFLAGS += -g -O0 
 else
-CFLAGS := -O2
+CFLAGS += -O2
 endif
 
 %.o: %.c
@@ -37,7 +38,7 @@ bootimg-create: $(BOOTIMG_CREATE_OBJS)
 	$(CC) $(CFLAGS) $(BOOTIMG_CREATE_OBJS) -o $@ $(BOOTIMG_LDFLAGS) $(foreach lib,$(BOOTIMG_LDLIBS),-l$(lib)) -lm
 
 ## Depends (not generated -- pls maintain)
-bootimg-create.c: bootimg.h bootimg-utils.h
-bootimg-extract.c: bootimg.h bootimg-utils.h
-bootimg-utils.c: bootimg-utils.h
+bootimg-create.c: bootimg-utils.c bootimg.h bootimg-utils.h
+bootimg-extract.c: bootimg-utils.c bootimg.h bootimg-utils.h
+bootimg-utils.c: bootimg-utils.h bootimg-priv.h
 cJSON.c: cJSON.h

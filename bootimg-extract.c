@@ -973,11 +973,12 @@ readPadding(FILE* f, unsigned itemsize, int pagesize)
     return count;
 }
 
+#else
+# error Cannot build with your libxml2 that does not have xmlWriter
+#endif /* defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED) */
+
 /* Local Variables:                                                */
 /* mode: C                                                         */
 /* comment-column: 0                                               */
-/* compile-command: "cc bootimg-extract.c -I/usr/include/libxml2 \ */
-/*                   -Dmumble=blaah -o bootimg-extract -llibxml2"  */
 /* End:                                                            */
 
-#endif /* defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED) */

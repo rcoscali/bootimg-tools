@@ -168,3 +168,8 @@ extern void cJSON_Minify(char *json);
 #endif
 
 #endif
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */

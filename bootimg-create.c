@@ -192,6 +192,10 @@ main(int argc, char **argv)
 		    progname, getLongOptionName(c), c, vflag);
 	  break;
 
+	case 'f':
+	  fflag = 1;
+	  break;
+
 	case 'o':
 	  {
 	    const char * oldval = oval;
@@ -361,6 +365,8 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
       /* Parse document */
       do
 	{
+	  
+	  
 	  /* TODO: go on ... */
 	}
       while (0);
@@ -509,4 +515,11 @@ createBootImageFromJsonMetadata(const char *filename, const char *outdir)
     }
 }
 
+#else
+# error Cannot build with your libxml2 library that does not have xmlReader
 #endif /* LIBXML_READER_ENABLED */
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */

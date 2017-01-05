@@ -29,3 +29,8 @@
 #define BOOTIMG_DTB_FILENAME 6
 
 #endif /* __BOOTIMG_PRIV_H__ */
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */

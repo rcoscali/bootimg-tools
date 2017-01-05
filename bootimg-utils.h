@@ -25,3 +25,8 @@ const char *getLongOptionName(char);
 const char *getImageFilename(const char *, const char *, int);
 
 #endif /* __BOOTIMG_UTILS_H__ */
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */
