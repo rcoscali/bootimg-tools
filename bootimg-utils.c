@@ -114,7 +114,7 @@ getImageFilename(const char *basename, const char *outdir, int kind)
     }
   
   if (vflag == 2)
-    fprintf(stdout, "%s: creating file with name '%s'\n", progname, pathname);
+    fprintf(stdout, "%s: using file with name '%s'\n", progname, pathname);
     
   return strdup(pathname);
 }
