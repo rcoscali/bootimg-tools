@@ -57,8 +57,26 @@ getImageFilename(const char *basename, const char *outdir, int kind)
   char pathname[PATH_MAX];
 
   bzero((void *)pathname, PATH_MAX);
+  
   switch (kind)
     {
+      /* strip extension for boot image files */
+    case BOOTIMG_BOOTIMG_FILENAME:
+      *(strchrnul(basename, '.')) = 0;
+      break;
+    default:
+      /* else change extension .<ext> in _<ext> for all other images */
+      if (strrchr(basename, '.'))
+	*(strrchr(basename, '.')) = '_';
+    }
+  
+  switch (kind)
+    {
+    case BOOTIMG_BOOTIMG_FILENAME:
+      sprintf(pathname, "%s/%s.img", outdir, basename);
+      if (vflag > 2)
+	fprintf(stdout, "%s: Boot Image filename = '%s'\n", progname, pathname);
+      break;
     case BOOTIMG_XML_FILENAME:
       sprintf(pathname, "%s.xml", basename);
       if (vflag > 2)
