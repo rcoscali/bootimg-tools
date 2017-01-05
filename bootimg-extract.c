@@ -26,6 +26,8 @@
 #include <libxml/xmlwriter.h>
 
 #include "bootimg.h"
+#include "bootimg-utils.h"
+#include "bootimg-priv.h"
 #include "cJSON.h"
 
 #if defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED)
@@ -131,7 +133,6 @@ extern int optind, opterr, optopt;
  */
 int extractBootImageMetadata(const char *, const char *);
 void printusage(void);
-const char *getLongOptionName(char);
 boot_img_hdr *findBootMagic(FILE *, boot_img_hdr *, off_t *);
 int readPadding(FILE*, unsigned, int);
 size_t extractKernelImage(FILE *, boot_img_hdr *, const char *, const char *);
@@ -893,21 +894,6 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
   return 0;
 }
   
-const char *
-getLongOptionName(char option)
-{
-  struct option *opt;
-
-  opt = long_options;
-  while (opt)
-    {
-      if (opt->val == option)
-	return opt->name;
-      opt++;
-    }
-  return unknown_option;
-}
-
 boot_img_hdr *
 findBootMagic(FILE *fp, boot_img_hdr *hdr, off_t *off)
 {
