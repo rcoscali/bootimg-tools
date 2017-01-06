@@ -42,3 +42,8 @@ char *cJSONUtils_FindPointerFromObjectTo(cJSON *object, cJSON *target);
 
 /* Sorts the members of the object into alphabetical order. */
 void cJSONUtils_SortObject(cJSON *object);
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */

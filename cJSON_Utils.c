@@ -826,3 +826,8 @@ cJSON *cJSONUtils_GenerateMergePatch(cJSON *from, cJSON *to)
 
     return patch;
 }
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */

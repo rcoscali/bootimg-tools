@@ -26,18 +26,13 @@
 #include <libxml/xmlwriter.h>
 
 #include "bootimg.h"
+#include "bootimg-utils.h"
+#include "bootimg-priv.h"
 #include "cJSON.h"
 
 #if defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED)
 
-#define BOOTIMG_ENCODING "ISO-8859-1"
-
-#define BOOTIMG_XML_FILENAME 1
-#define BOOTIMG_JSON_FILENAME 2
-#define BOOTIMG_KERNEL_FILENAME 3
-#define BOOTIMG_RAMDISK_FILENAME 4
-#define BOOTIMG_SECOND_LOADER_FILENAME 5
-#define BOOTIMG_DTB_FILENAME 6
+#include "bootimg-priv.h"
 
 #define BOARD_OS_VERSION_COMMENT \
   "This is the version of the board Operating System. It is ususally " \
@@ -138,10 +133,8 @@ extern int optind, opterr, optopt;
  */
 int extractBootImageMetadata(const char *, const char *);
 void printusage(void);
-const char *getLongOptionName(char);
 boot_img_hdr *findBootMagic(FILE *, boot_img_hdr *, off_t *);
 int readPadding(FILE*, unsigned, int);
-const char *getImageFilename(const char *, const char *, int);
 size_t extractKernelImage(FILE *, boot_img_hdr *, const char *, const char *);
 size_t extractRamdiskImage(FILE *, boot_img_hdr *, const char *, const char *);
 size_t extractSecondBootloaderImage(FILE *, boot_img_hdr *, const char *, const char *);
@@ -338,59 +331,6 @@ printusage(void)
     }
 
   free((void *)str);
-}
-
-/*
- * Return an image file name
- */
-const char *
-getImageFilename(const char *basename, const char *outdir, int kind)
-{
-  char pathname[PATH_MAX];
-
-  bzero((void *)pathname, PATH_MAX);
-  switch (kind)
-    {
-    case BOOTIMG_XML_FILENAME:
-      sprintf(pathname, "%s.xml", basename);
-      if (vflag > 2)
-	fprintf(stdout, "%s: XML Metadata filename = '%s'\n", progname, pathname);
-      break;
-    case BOOTIMG_JSON_FILENAME:
-      sprintf(pathname, "%s.json", basename);
-      if (vflag > 2)
-	fprintf(stdout, "%s: JSON Metadata filename = '%s'\n", progname, pathname);
-      break;
-    case BOOTIMG_KERNEL_FILENAME:
-      sprintf(pathname, "%s/%s.img", outdir, basename);
-      if (vflag > 2)
-	fprintf(stdout, "%s: KERNEL filename = '%s'\n", progname, pathname);
-      break;
-    case BOOTIMG_RAMDISK_FILENAME:
-      sprintf(pathname, "%s/%s.cpio.gz", outdir, basename);
-      if (vflag > 2)
-	fprintf(stdout, "%s: RAMDISK filename = '%s'\n", progname, pathname);
-      break;
-    case BOOTIMG_SECOND_LOADER_FILENAME:
-      sprintf(pathname, "%s/%s-2ndldr.img", outdir, basename);
-      if (vflag > 2)
-	fprintf(stdout, "%s: 2nd BOOTLOADER filename = '%s'\n", progname, pathname);
-      break;
-    case BOOTIMG_DTB_FILENAME:
-      sprintf(pathname, "%s/%s.dtb", outdir, basename);
-      if (vflag > 2)
-	fprintf(stdout, "%s: DTB filename = '%s'\n", progname, pathname);
-      break;
-    default:
-      sprintf(pathname, "%s-unknown.dat", basename);
-      fprintf(stderr, "%s: error: Unknown filename = '%s'\n", progname, pathname);
-      break;
-    }
-  
-  if (vflag == 2)
-    fprintf(stdout, "%s: creating file with name '%s'\n", progname, pathname);
-    
-  return strdup(pathname);
 }
 
 /*
@@ -952,21 +892,6 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
   return 0;
 }
   
-const char *
-getLongOptionName(char option)
-{
-  struct option *opt;
-
-  opt = long_options;
-  while (opt)
-    {
-      if (opt->val == option)
-	return opt->name;
-      opt++;
-    }
-  return unknown_option;
-}
-
 boot_img_hdr *
 findBootMagic(FILE *fp, boot_img_hdr *hdr, off_t *off)
 {
@@ -1046,11 +971,12 @@ readPadding(FILE* f, unsigned itemsize, int pagesize)
     return count;
 }
 
+#else
+# error Cannot build with your libxml2 that does not have xmlWriter
+#endif /* defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED) */
+
 /* Local Variables:                                                */
 /* mode: C                                                         */
 /* comment-column: 0                                               */
-/* compile-command: "cc bootimg-extract.c -I/usr/include/libxml2 \ */
-/*                   -Dmumble=blaah -o bootimg-extract -llibxml2"  */
 /* End:                                                            */
 
-#endif /* defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED) */

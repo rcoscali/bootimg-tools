@@ -2260,3 +2260,8 @@ void cJSON_Minify(char *json)
     /* and null-terminate. */
     *into = '\0';
 }
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */

@@ -18,15 +18,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <unistd.h>
+#include <unistd.h>
 #include <getopt.h>
 #include <alloca.h>
 
-//#include <libxml/encoding.h>
-//#include <libxml/xmlwriter.h>
+#include <libxml/xmlreader.h>
 
 #include "bootimg.h"
 #include "cJSON.h"
+
+#ifdef LIBXML_READER_ENABLED
+
+#include "bootimg-priv.h"
+#include "bootimg-utils.h"
 
 /*
  * Options flags & values
@@ -43,6 +47,7 @@ int xflag = 0;
 int jflag = 0;
 int nflag = 0;
 int pflag = 0;
+int fflag = 0;
 
 /* nval: basename */
 char *nval = (char *)NULL;
@@ -66,10 +71,11 @@ off_t kernel_offset = 0x00008000;
 size_t base_addr = 0; 
 
 static const char *progusage =
-  "usage: %s --verbose[=<lvl>] ...] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] imgfile1 [imgfile2 ...]\n"
+  "usage: %s --verbose[=<lvl>] ...] [--force] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] imgfile1 [imgfile2 ...]\n"
   "       %s --help                                                                                         \n"
   "                                                                                                         \n"
   "       with the following options                                                                        \n"
+  "       %s --force|-f          : force files overwrite.                                                   \n"
   "       %s --verbose|-v <lvl>  : be verbose at runtime. <lvl> is added to current verbosity level.        \n"
   "       %s                       If omited, one is assumed. More verbose flags imply more verbosity.      \n"
   "       %s --outdir|-o <outdir>: Save potentially big image files in the <outdir> directory               \n"
@@ -89,6 +95,7 @@ static const char *progusage =
  */
 struct option long_options[] = {
   {"verbose",  optional_argument, 0,  'v' },
+  {"force",    no_argument,       0,  'f' },
   {"outdir",   required_argument, 0,  'o' },
   {"name",     required_argument, 0,  'n' },
   {"xml",      no_argument,       0,  'x' },
@@ -97,7 +104,7 @@ struct option long_options[] = {
   {"help",     no_argument,       0,  'h' },
   {0,          0,                 0,   0  }
 };
-#define BOOTIMG_OPTSTRING "v::o:n:xjh:"
+#define BOOTIMG_OPTSTRING "v::fo:n:xjh:"
 const char *unknown_option = "????";
 
 /*
@@ -110,6 +117,8 @@ extern int optind, opterr, optopt;
  * Forward decl
  */
 void printusage(void);
+void createBootImageFromXmlMetadata(const char *, const char *);
+void createBootImageFromJsonMetadata(const char *, const char *);
 
 
 /*
@@ -181,6 +190,10 @@ main(int argc, char **argv)
 	  if (vflag > 3)
 	    fprintf(stderr, "%s: option %s/%c set to %d\n",
 		    progname, getLongOptionName(c), c, vflag);
+	  break;
+
+	case 'f':
+	  fflag = 1;
 	  break;
 
 	case 'o':
@@ -262,14 +275,26 @@ main(int argc, char **argv)
     {
       if (optind != argc -1 && !fflag)
 	{
-	  fprintf(stderr, "%s: warning: You provided several image to create to the same image file ?");
-	  fprintf(stderr, "%s: warning: Stop processing as the force flag was not provided")
+	  fprintf(stderr,
+		  "%s: warning: You provided several image to create to the same image file ?",
+		  progname);
+	  fprintf(stderr,
+		  "%s: warning: Stop processing as the force flag was not provided",
+		  progname);
 	}
+      
       while (optind < argc)
-	/* 
-	 *
-	 */
-	createBootImageMetadata(argv[optind++], oval);
+	{
+	  /* 
+	   * Create image from metadata file according to its type
+	   */
+	  /* Ptr arithm: check filename ends with .xml */
+	  if (strstr(argv[optind], ".xml") == (argv[optind] + strlen(argv[optind]) - 4))
+	    createBootImageFromXmlMetadata(argv[optind++], oval);
+
+	  if (strstr(argv[optind], ".json") == (argv[optind] + strlen(argv[optind]) - 5))
+	    createBootImageFromJsonMetadata(argv[optind++], oval);
+	}
 
       /*
        * Cleanup function for the XML library.
@@ -317,3 +342,184 @@ printusage(void)
   free((void *)str);
 }
 
+/*
+ * getImageFilename
+ */
+
+/*
+ * createBootImageFromXmlMetadata
+ */
+void 
+createBootImageFromXmlMetadata(const char *filename, const char *outdir)
+{
+  xmlTextReaderPtr xmlReader;
+  xmlDocPtr xmlDoc;
+  const char *pathname = getImageFilename(outdir, filename, BOOTIMG_XML_FILENAME);
+
+  xmlReader = xmlReaderForFile(pathname, NULL, 0);
+  if (xmlReader == (xmlTextReaderPtr)NULL)
+    fprintf(stderr, "%s: error: cannot create xml reader for '%s'!\n", progname, pathname);
+
+  else
+    {
+      /* Parse document */
+      do
+	{
+	  
+	  
+	  /* TODO: go on ... */
+	}
+      while (0);
+      
+      /* Cleanup xml parser */
+      xmlDoc = xmlTextReaderCurrentDoc(xmlReader);
+      if (xmlDoc != (xmlDocPtr)NULL)
+	xmlFreeDoc(xmlDoc);
+
+      xmlFreeTextReader(xmlReader);
+    }
+}
+
+/*
+ * createBootImageFromJsonMetadata
+ */
+void 
+createBootImageFromJsonMetadata(const char *filename, const char *outdir)
+{
+  FILE *jfp = NULL;
+  const char *pathname = getImageFilename(outdir, filename, BOOTIMG_JSON_FILENAME);
+
+  jfp = fopen(pathname, "rb");
+  if (jfp == NULL)
+    fprintf(stderr, "%s: error: cannot open json file '%s' for reading!\n", progname, pathname);
+
+  else
+    {
+      size_t json_sz;
+      char *buf = (char *)NULL;
+
+      /* Get size of json file */
+      rewind(jfp);
+      json_sz = ftell(jfp);
+
+      /* Alloc mem for storing json data */
+      buf = (char *)malloc(json_sz * sizeof(char));
+      if (buf == (char *)NULL)
+	{
+	  /* Failed! cleanup */
+	  fprintf(stderr,
+		  "%s: error: cannot allocate %ld bytes for reading '%s'!\n",
+		  progname, json_sz, pathname);
+	  fclose(jfp);
+	}
+      
+      else
+	{
+	  /* Ok. Read data ... */
+	  size_t rdsz = fread((void *)buf, json_sz, 1, jfp);
+	  if (rdsz != 1)
+	    {
+	      /* Failed! cleanup */
+	      fprintf(stderr,
+		      "%s: error: expected '%lu' bytes but read '%lu' bytes from '%s'!\n",
+		      progname, json_sz, json_sz * rdsz, pathname);
+	      free((void *)buf);
+	      fclose(jfp);	      
+	    }
+
+	  else
+	    {
+	      cJSON *jsonBootImageFile = (cJSON *)NULL;
+	      const char *bootImageFile = (const char *)NULL;
+	      FILE *imgfp = (FILE *)NULL;
+	      boot_img_hdr header, *hdr;
+
+	      /* Cleanup some resources we don't need anymore */
+	      fclose(jfp);	      		  
+
+	      /* init header struct */
+	      hdr = initBootImgHeader(&header);
+	      
+	      /* Ok. Parse json data in a json doc for usage. */
+	      cJSON *jsonDoc = cJSON_Parse(buf);
+
+	      /* Release json data buffer memory */
+	      free((void *)buf);
+
+	      do
+		{
+		  /* First get the boot.img file pathname */
+		  cJSON *jsonBootImageFile = cJSON_GetObjectItem(jsonDoc, "bootImageFile");
+		  const char *bootImageFile = strdup(jsonBootImageFile->valuestring);
+		  if (bootImageFile == (char *)NULL)
+		    {
+		      fprintf(stderr,
+			      "%s: error: cannot allocate memory for boot image file pathname!\n",
+			      progname);
+		      break;
+		    }
+		  cJSON_Delete(jsonBootImageFile);
+		  jsonBootImageFile = (cJSON *)NULL;
+
+		  /*
+		   * TODO
+		   * get all fields from json doc and set them in header struct
+		   */
+		  
+		  /* Open image file */
+		  imgfp = fopen(bootImageFile, "wb");
+		  if (imgfp = (FILE *)NULL)
+		    {
+		      /* Failed! cleanup */
+		      fprintf(stderr,
+			      "%s: error: cannot open boot image file '%s' for writing!\n",
+			      progname, bootImageFile);
+		      break;
+		    }
+
+		  size_t wrsz = fwrite(hdr, sizeof(boot_img_hdr), 1, imgfp);
+		  if (wrsz != 1)
+		    {
+		      fprintf(stderr,
+			      "%s: error: expected %lu bytes, wrote %lu: cannot write boot image to file '%s'!\n",
+			      progname, sizeof(boot_img_hdr), wrsz * sizeof(boot_img_hdr), bootImageFile);
+		      break;
+		    }
+
+		  if (fflush(imgfp))
+		    {
+		      fprintf(stderr,
+			      "%s: error: couldn't flush boot image file!\n",
+			      progname);
+		      break;
+		    }
+		}
+	      while (0);
+
+	      /* 
+	       * cleanup 
+	       */
+	      if (imgfp)
+		fclose(imgfp);
+	      imgfp = (FILE *)NULL;
+
+	      if (bootImageFile)
+		free((void *)bootImageFile);
+	      bootImageFile = (char *)NULL;
+
+	      if (jsonBootImageFile)
+		cJSON_Delete(jsonBootImageFile);
+	      jsonBootImageFile = (cJSON *)NULL;
+	    }
+	}
+    }
+}
+
+#else
+# error Cannot build with your libxml2 library that does not have xmlReader
+#endif /* LIBXML_READER_ENABLED */
+
+/* Local Variables:                                                */
+/* mode: C                                                         */
+/* comment-column: 0                                               */
+/* End:                                                            */
