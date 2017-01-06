@@ -230,10 +230,8 @@ main(int argc, char **argv)
 		  oval = &oval[2];
 		sprintf(newval, "%s/%s", oldval, oval);
 		oval = strdup(newval);
-		free((void *)oldval);
 	      }
-	    else
-	      free((void *)oldval);
+	    free((void *)oldval);
 	    if (vflag)
 	      fprintf(stderr, "%s: option %s/%c (=%d) set\n",
 		      progname, getLongOptionName(c), c, oflag);
