@@ -29,11 +29,9 @@
  * Retrieve long option name from short name
  */
 const char *
-getLongOptionName(char option) 
+getLongOptionName(struct option *opt, char option)
 {
-  extern struct option *long_options;
-  struct option *opt = long_options;
-  do if (opt->val == option) return opt->name; while (++opt);
+  do { if (opt->val == option) return opt->name; opt++; } while (opt->name);
   extern const char *unknown_option;
   return unknown_option;
 }
