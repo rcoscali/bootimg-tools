@@ -2,7 +2,8 @@
  *
  * Copyright 2007, The Android Open Source Project
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); 
+ * Licensed under the Apache License, Version 2.0 (the "Lvoid
+ createBootImageFromJsonMetadata(const char *filename, const char *outdir)icense");
  * you may not use this file except in compliance with the License. 
  * You may obtain a copy of the License at 
  *
@@ -20,9 +21,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <fcntl.h>
 #include <alloca.h>
 #include <errno.h>
 
+#include <openssl/sha.h>
 #include <libxml/xmlreader.h>
 
 #include "bootimg.h"
@@ -41,6 +44,7 @@
  * - j: json metadata file. jflag € [0, 1]
  * - p: page size. pflag € [0, 1]
  * - n: basename for metadata file. nflag € [0, 1]
+ * - f: force overwrite. fflag € [0, 1]
  */
 int vflag = 0;
 int oflag = 0;
@@ -49,6 +53,7 @@ int jflag = 0;
 int nflag = 0;
 int pflag = 0;
 int fflag = 0;
+int iflag = 0;
 
 /* nval: basename */
 char *nval = (char *)NULL;
@@ -65,20 +70,8 @@ char *progname = (char *)NULL;
 char *blankname = (char *)NULL;
 
 /*
- * Local images filenames that will be aggregated
+ * Usage string
  */
-xmlChar *bootImageFile = (xmlChar *)NULL;
-xmlChar *ramdiskImageFile = (xmlChar *)NULL;
-xmlChar *secondImageFile = (xmlChar *)NULL;
-xmlChar *dtbImageFile = (xmlChar *)NULL;
-
-/*
- * Kernel offset is 0x8000
- * then base addr is calculated with kernel_addr - offset;
- */
-off_t kernel_offset = 0x00008000;
-size_t base_addr = 0; 
-
 static const char *progusage =
   "usage: %s --verbose[=<lvl>] ...] [--force] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] imgfile1 [imgfile2 ...]\n"
   "       %s --help                                                                                         \n"
@@ -96,15 +89,17 @@ static const char *progusage =
   "       %s                       This option is exclusive with xml.                                       \n"
   "       %s                       Only the last one will be taken into account.                            \n"
   "       %s --pagesize|-p <pgsz>: Image page size. If not providedn, use the one specified in the file     \n"
+  "       %s --identify|-i       : display the ID field for this boot image.                                \n"
   "       %s --name|-n <basename>: provide a basename template for the metadata file.                       \n"
   "       %s --help|-h           : display this message.                                                    \n";
 
 /*
- * Long options
+ * Long options struct
  */
 struct option long_options[] = {
   {"verbose",  optional_argument, 0,  'v' },
   {"force",    no_argument,       0,  'f' },
+  {"identify", no_argument,       0,  'i' },
   {"outdir",   required_argument, 0,  'o' },
   {"name",     required_argument, 0,  'n' },
   {"xml",      no_argument,       0,  'x' },
@@ -113,8 +108,11 @@ struct option long_options[] = {
   {"help",     no_argument,       0,  'h' },
   {0,          0,                 0,   0  }
 };
-#define BOOTIMG_OPTSTRING "v::fo:n:xjh:"
+#define BOOTIMG_OPTSTRING "v::fio:n:xjh:"
 const char *unknown_option = "????";
+
+/* padding buffer */
+static unsigned char padding[0x20000] = { 0, };
 
 /*
  * Getopt external defs
@@ -130,10 +128,19 @@ extern error_t errno;
 /*
  * Forward decl
  */
+static void *loadImage(const char *, size_t *);
+void *my_malloc_fn(size_t);
+void my_free_fn(void *);
+int writeImage(bootimgXmlParsingContext_p);
 void printusage(void);
 void createBootImageFromXmlMetadata(const char *, const char *);
 void createBootImageFromJsonMetadata(const char *, const char *);
-
+int writePaddingToFd(int, size_t, size_t);
+void writeStringToFile(char *, char *);
+void readerErrorFunc(void *, const char *, xmlParserSeverities, xmlTextReaderLocatorPtr);
+int createBootImageProcessXmlNode(bootimgXmlParsingContext_t *, xmlTextReaderPtr);
+void createBootImageFromXmlMetadata(const char *, const char *);
+void createBootImageFromJsonMetadata(const char *, const char *);
 
 /*
  * Used for cJSON allocations
@@ -152,6 +159,368 @@ my_free_fn(void *ptr)
 {
   free(ptr);
 }
+
+static void *
+loadImage(const char *filename, size_t *sz_p)
+{
+  void *data = (void *)NULL;
+  size_t sz = 0;
+  int fd = -1;
+
+  do
+    {
+      fd = open(filename, O_RDONLY);
+      if (fd < 0)
+        break;
+
+      sz = lseek(fd, 0, SEEK_END);
+      if (sz < 0)
+        break;
+
+      do
+        {
+          if (lseek(fd, 0, SEEK_SET) != 0)
+            break;
+
+          data = (void *)malloc(sz);
+          if (data == (void *)NULL)
+            break;
+
+          if (read(fd, data, sz) != sz)
+            break;
+
+          close(fd);
+          fd = -1;
+
+          if (sz)
+            *sz_p = sz;
+          return data;
+        }
+      while (0);
+
+      if (fd != -1)
+        close(fd);
+
+      if (data != (void *)NULL)
+        free(data);
+
+      data = (void *)NULL;
+    }
+  while (0);
+
+  return data;
+}
+
+/*
+ * compute a digest from images and images' sizes
+ * then store it in id header field
+ */
+void
+updateIdHeaderField(bootimgXmlParsingContext_t *ctxt, data_context_t *dctxt)
+{
+  /* init sha512 context */
+  SHA512_CTX sha;
+  (void)SHA512_Init(&sha);
+
+  /* start computation with kernel image */
+  (void)SHA512_Update(&sha,
+                      dctxt->kernel_data,
+                      ctxt->hdr.kernel_size);
+  /* update with the kernel_size field */
+  (void)SHA512_Update(&sha,
+                      (const void *)&ctxt->hdr.kernel_size,
+                      sizeof(ctxt->hdr.kernel_size));
+  /* add the ramdisk image */
+  (void)SHA512_Update(&sha,
+                      dctxt->ramdisk_data,
+                      ctxt->hdr.ramdisk_size);
+  /* and its size field */
+  (void)SHA512_Update(&sha,
+                      (const void *)&ctxt->hdr.ramdisk_size,
+                      sizeof(ctxt->hdr.ramdisk_size));
+  /* second loader image is available */
+  if (dctxt->second_data)
+    (void)SHA512_Update(&sha,
+                        dctxt->second_data,
+                        ctxt->hdr.second_size);
+  /* and its size field */
+  (void)SHA512_Update(&sha,
+                      (const void *)&ctxt->hdr.second_size,
+                      sizeof(ctxt->hdr.second_size));
+  /* then the device tree binary image */
+  if (dctxt->dtb_data)
+    (void)SHA512_Update(&sha,
+                        dctxt->dtb_data,
+                        ctxt->hdr.dt_size);
+  /* and its size field */
+  (void)SHA512_Update(&sha,
+                      (const void *)&ctxt->hdr.dt_size,
+                      sizeof(ctxt->hdr.dt_size));
+  /* get the digest in the id field of the header */
+  (void)SHA512_Final((unsigned char *)&ctxt->hdr.id, &sha);
+}
+
+/*
+ * Copy values obtained from parsing to header struct
+ */
+void
+setHeaderValuesFromParsingContext(bootimgXmlParsingContext_p ctxt)
+{
+  ctxt->hdr.page_size = ctxt->pageSize;
+
+  ctxt->hdr.kernel_addr = ctxt->baseAddr + ctxt->kernelOffset;
+  ctxt->hdr.ramdisk_addr = ctxt->baseAddr + ctxt->ramdiskOffset;
+  ctxt->hdr.second_addr = ctxt->baseAddr + ctxt->secondOffset;
+  ctxt->hdr.tags_addr = ctxt->baseAddr + ctxt->tagsOffset;
+
+  ctxt->hdr.os_version = (ctxt->osVersion.<< 11) | ctxt->osPatchLvl;
+
+  if (strlen(ctxt->cmdLine) > BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE)
+    {
+      /* truncate */
+      strncpy(ctxt->hdr.cmdline, ctxt->cmdLine, BOOT_ARGS_SIZE);
+      strncpy(ctxt->hdr.extra_cmdline, &ctxt->cmdLine[BOOT_ARGS_SIZE], BOOT_EXTRA_ARGS_SIZE);
+    }
+  if (strlen(ctxt->cmdLine) < BOOT_EXTRA_ARGS_SIZE && BOOT_ARGS_SIZE <= strlen(ctxt->cmdLine) )
+    {
+      strncpy(ctxt->hdr.cmdline, ctxt->cmdLine, BOOT_ARGS_SIZE);
+      strncpy(ctxt->hdr.extra_cmdline, &ctxt->cmdLine[BOOT_ARGS_SIZE], BOOTIMG_MIN(BOOT_EXTRA_ARGS_SIZE, strlen(ctxt->cmdLine) - BOOT_ARGS_SIZE));
+    }
+  else
+    {
+      strncpy(ctxt->hdr.cmdline, ctxt->cmdLine, BOOTIMG_MIN(BOOT_ARGS_SIZE, strlen(ctxt->cmdLine)));
+    }
+
+  strncpy(ctxt->hdr.name, ctxt->boardName, BOOTIMG_MIN(strlen(ctxt->boardName, BOOT_NAME_SIZE)));
+}
+
+/*
+ * Load images, compute last hdr fields and write boot image
+ */
+int
+writeImage(bootimgXmlParsingContext_p ctxt)
+{
+  int rc = -1;
+  data_context_t data_ctxt, *dctxt = &data_ctxt;
+
+  do
+    {
+      /* init data context */
+      bzero((void *)dctxt, sizeof(data_context_t));
+
+      /* Report header data from parsing context to header struct */
+      setHeaderValuesFromParsingContext(ctxt);
+
+      /* load the kernel image */
+      dctxt->kernel_data = loadImage(ctxt->kernelImageFile,
+                                     (size_t *)&ctxt->hdr.kernel_size);
+      if (!dctxt->kernel_data)
+        {
+          fprintf(stderr,
+                  "%s: error: couldn't load kernel image file at '%s'\n",
+                  progname,
+                  ctxt->kernelImageFile);
+          break;
+        }
+
+      /* load the ramdisk image */
+      dctxt->ramdisk_data = loadImage(ctxt->ramdiskImageFile,
+                                      (size_t *)&ctxt->hdr.ramdisk_size);
+      if (!dctxt->ramdisk_data)
+        {
+          fprintf(stderr,
+                  "%s: error: couldn't load ramdisk image file at '%s'\n",
+                  progname,
+                  ctxt->ramdiskImageFile);
+          break;
+        }
+
+      /* load the second bootloader image if one is available */
+      if (ctxt->secondImageFile)
+        {
+          dctxt->second_data = loadImage(ctxt->secondImageFile,
+                                         (size_t *)&ctxt->hdr.second_size);
+          if (!dctxt->second_data)
+            {
+              fprintf(stderr,
+                      "%s: error: couldn't load second loader image file at '%s'\n",
+                      progname,
+                      ctxt->secondImageFile);
+              break;
+            }
+        }
+
+      /* load the device tree binary image if one is available */
+      if (ctxt->dtbImageFile)
+        {
+          dctxt->dtb_data = loadImage(ctxt->dtbImageFile,
+                                      (size_t *)&ctxt->hdr.dt_size);
+          if (!dctxt->dtb_data)
+            {
+              fprintf(stderr,
+                      "%s: error: couldn't load device tree binary image file at '%s'\n",
+                      progname,
+                      ctxt->dtbImageFile);
+              break;
+            }
+        }
+
+      /* update boot image id */
+      updateIdHeaderField(ctxt, dctxt);
+
+      /* open image file for writing */
+      int fd = open(ctxt->bootImageFile, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+      if (fd < 0)
+        {
+          perror(progname);
+          fprintf(stderr,
+                  "%s: error: cannot open image file '%s' for writing\n",
+                  progname,
+                  ctxt->bootImageFile);
+          break;
+        }
+
+      /*
+       * Headerval
+       */
+      /* write the header data */
+      size_t wrsz = 0;
+      if ((wrsz = write(fd, &ctxt->hdr, sizeof (ctxt->hdr))) != sizeof (ctxt->hdr))
+        {
+          fprintf(stderr,
+                  "%s: error: expected %lu header bytes written but got only %lu!\n",
+                  progname,
+                  sizeof (ctxt->hdr),
+                  wrsz);
+          break;
+        }
+      /* pad to the next page boundary */
+      if (writePaddingToFd(fd, ctxt->hdr.page_size, sizeof(ctxt->hdr)) == -1)
+        {
+          fprintf(stderr,
+                  "%s: error: failed to pad boot image header!\n",
+                  progname);
+          break;
+        }
+
+      /*
+       * Kernel image
+       */
+      if ((wrsz = write(fd, dctxt->kernel_data, ctxt->hdr.kernel_size)) != ctxt->hdr.kernel_size)
+        {
+          fprintf(stderr,
+                  "%s: error: expected %lu kernel bytes written but got only %lu!\n",
+                  progname,
+                  sizeof (ctxt->hdr.kernel_size),
+                  wrsz);
+          break;
+        }
+      /* pad to the next page boundary */
+      if (writePaddingToFd(fd, ctxt->hdr.page_size, ctxt->hdr.kernel_size) == -1)
+        {
+          fprintf(stderr,
+                  "%s: error: failed to pad kernel image!\n",
+                  progname);
+          break;
+        }
+
+      /*
+       * Ramdisk image
+       */
+      if ((wrsz = write(fd, dctxt->ramdisk_data, ctxt->hdr.ramdisk_size)) != ctxt->hdr.ramdisk_size)
+        {
+          fprintf(stderr,
+                  "%s: error: expected %lu ramdisk bytes written but got only %lu!\n",
+                  progname,
+                  sizeof (ctxt->hdr.ramdisk_size),
+                  wrsz);
+          break;
+        }
+      /* pad to the next page boundary */
+      if (writePaddingToFd(fd, ctxt->hdr.page_size, ctxt->hdr.ramdisk_size) == -1)
+        {
+          fprintf(stderr,
+                  "%s: error: failed to pad ramdisk image!\n",
+                  progname);
+          break;
+        }
+
+      /*
+       * Second boot loader image
+       */
+      if (dctxt->second_data)
+        {
+          if ((wrsz = write(fd, dctxt->second_data, ctxt->hdr.second_size)) != ctxt->hdr.second_size)
+            {
+              fprintf(stderr,
+                      "%s: error: expected %lu second bytes written but got only %lu!\n",
+                      progname,
+                      sizeof (ctxt->hdr.second_size),
+                      wrsz);
+              break;
+            }
+          /* pad to the next page boundary */
+          if (writePaddingToFd(fd, ctxt->hdr.page_size, ctxt->hdr.second_size) == -1)
+            {
+              fprintf(stderr,
+                      "%s: error: failed to pad second image!\n",
+                      progname);
+              break;
+            }
+        }
+
+      /*
+       * Device tree binary image
+       */
+      if (dctxt->dtb_data)
+        {
+          if ((wrsz = write(fd, dctxt->dtb_data, ctxt->hdr.dt_size)) != ctxt->hdr.dt_size)
+            {
+              fprintf(stderr,
+                      "%s: error: expected %lu device tree binary image bytes written but got only %lu!\n",
+                      progname,
+                      sizeof (ctxt->hdr.dt_size),
+                      wrsz);
+              break;
+            }
+          /* pad to the next page boundary */
+          if (writePaddingToFd(fd, ctxt->hdr.dt_size, ctxt->hdr.dt_size) == -1)
+            {
+              fprintf(stderr,
+                      "%s: error: failed to pad device tree binary image!\n",
+                      progname);
+              break;
+            }
+        }
+
+      if (iflag)
+        {
+          fprintf(stdout, "%s: Boot Image Identification:\n", progname);
+          fprintf(stdout, "%s: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x \t%s\n",
+                  blankname,
+                  (ctxt->hdr.id[0]>>24)&0xFF, (ctxt->hdr.id[0]>>16)&0xFF, (ctxt->hdr.id[0]>>8)&0xFF, ctxt->hdr.id[0]&0xFF,
+                  (ctxt->hdr.id[1]>>24)&0xFF, (ctxt->hdr.id[1]>>16)&0xFF, (ctxt->hdr.id[1]>>8)&0xFF, ctxt->hdr.id[1]&0xFF,
+                  (ctxt->hdr.id[2]>>24)&0xFF, (ctxt->hdr.id[2]>>16)&0xFF, (ctxt->hdr.id[2]>>8)&0xFF, ctxt->hdr.id[2]&0xFF,
+                  (ctxt->hdr.id[3]>>24)&0xFF, (ctxt->hdr.id[3]>>16)&0xFF, (ctxt->hdr.id[3]>>8)&0xFF, ctxt->hdr.id[3]&0xFF,
+                  (ctxt->hdr.id[4]>>24)&0xFF, (ctxt->hdr.id[4]>>16)&0xFF, (ctxt->hdr.id[4]>>8)&0xFF, ctxt->hdr.id[4]&0xFF,
+                  (ctxt->hdr.id[5]>>24)&0xFF, (ctxt->hdr.id[5]>>16)&0xFF, (ctxt->hdr.id[5]>>8)&0xFF, ctxt->hdr.id[5]&0xFF,
+                  (ctxt->hdr.id[6]>>24)&0xFF, (ctxt->hdr.id[6]>>16)&0xFF, (ctxt->hdr.id[6]>>8)&0xFF, ctxt->hdr.id[6]&0xFF,
+                  (ctxt->hdr.id[7]>>24)&0xFF, (ctxt->hdr.id[7]>>16)&0xFF, (ctxt->hdr.id[7]>>8)&0xFF, ctxt->hdr.id[7]&0xFF,
+                  ctxt->bootImageFile);
+        }
+
+      /*
+       * TODO
+       * Manage extra_cmdline
+       */
+      rc = 0;
+    }
+  while (0);
+
+  return rc;
+}
+
+
 
 /*
  * main
@@ -203,7 +572,7 @@ main(int argc, char **argv)
             vflag++;
           if (vflag > 3)
             fprintf(stderr, "%s: option %s/%c set to %d\n",
-                    progname, getLongOptionName(c), c, vflag);
+                    progname, getLongOptionName(long_options, c), c, vflag);
           break;
 
         case 'f':
@@ -226,7 +595,7 @@ main(int argc, char **argv)
             free((void *)oldval);
             if (vflag)
               fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-                      progname, getLongOptionName(c), c, oflag);
+                      progname, getLongOptionName(long_options, c), c, oflag);
           }
           break;
           
@@ -234,14 +603,21 @@ main(int argc, char **argv)
           xflag = 1;
           if (vflag > 3)
             fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-                    progname, getLongOptionName(c), c, xflag);
+                    progname, getLongOptionName(long_options, c), c, xflag);
           break;
           
         case 'j':
           jflag = 1;
           if (vflag > 3)
             fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-                    progname, getLongOptionName(c), c, jflag);
+                    progname, getLongOptionName(long_options, c), c, jflag);
+          break;
+          
+        case 'i':
+          iflag = 1;
+          if (vflag > 3)
+            fprintf(stderr, "%s: option %s/%c (=%d) set\n",
+                    progname, getLongOptionName(long_options, c), c, iflag);
           break;
           
         case 'n':
@@ -249,7 +625,7 @@ main(int argc, char **argv)
           nval = optarg;
           if (vflag > 3)
             fprintf(stderr, "%s: option %s/%c (=%d) set with value '%s'\n",
-                    progname, getLongOptionName(c), c, nflag, nval);
+                    progname, getLongOptionName(long_options, c), c, nflag, nval);
           break;
 
         case 'p':
@@ -257,7 +633,7 @@ main(int argc, char **argv)
           pval = strtol(optarg, NULL, 10);
           if (vflag > 3)
             fprintf(stderr, "%s: option %s/%c (=%d) set with value '%lu'\n",
-                    progname, getLongOptionName(c), c, pflag, pval);
+                    progname, getLongOptionName(long_options, c), c, pflag, pval);
           break;
 
         case 'h':
@@ -306,7 +682,7 @@ main(int argc, char **argv)
           if (strstr(argv[optind], ".xml") == (argv[optind] + strlen(argv[optind]) - 4))
             createBootImageFromXmlMetadata(argv[optind++], oval);
 
-          if (strstr(argv[optind], ".json") == (argv[optind] + strlen(argv[optind]) - 5))
+          else if (strstr(argv[optind], ".json") == (argv[optind] + strlen(argv[optind]) - 5))
             createBootImageFromJsonMetadata(argv[optind++], oval);
         }
 
@@ -324,6 +700,44 @@ main(int argc, char **argv)
     }
 
   return(0);  
+}
+
+/*
+ * write padding in a file until page border
+ */
+int
+writePaddingToFd(int fd, size_t pagesize, size_t itemsize)
+{
+  unsigned pagemask = pagesize - 1;
+  ssize_t count;
+
+  /* padding unneeded */
+  if ((itemsize & pagemask) == 0)
+    return 0;
+
+  /* compute size to page border */
+  count = pagesize - (itemsize & pagemask);
+
+  /* if write fails return error */
+  if (write(fd, padding, count) != count)
+    return -1;
+  else
+    return 0;
+}
+
+/*
+ * Write a C string in a file without the '\0'
+ */
+void
+writeStringToFile(char* file, char* string)
+{
+  FILE* f = fopen(file, "w");
+  if (f)
+    {
+      fwrite(string, strlen(string), 1, f);
+      fwrite("\n", 1, 1, f);
+      fclose(f);
+    }
 }
 
 /*
@@ -361,6 +775,7 @@ void readerErrorFunc(void *arg,
                      xmlParserSeverities severity,
                      xmlTextReaderLocatorPtr locator)
 {
+  bootimgXmlParsingContext_p ctxt = (bootimgXmlParsingContext_p)arg;
   char severityStr[100];
   
   switch (severity)
@@ -422,7 +837,7 @@ createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr
             {
               if (ELEMENT_OPENED(cmdLine))
                 {
-                  ProcessXmlText4String(cmdLine, BOOT_ARGS_SIZE);
+                  ProcessXmlText4String(cmdLine, BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE);
                 }
               else if (ELEMENT_OPENED(boardName))
                 {
@@ -444,6 +859,10 @@ createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr
                 {
                   ProcessXmlText4Number(ramdiskOffset);
                 }
+              else if (ELEMENT_OPENED(secondOffset))
+                {
+                  ProcessXmlText4Number(secondOffset);
+                }
               else if (ELEMENT_OPENED(tagsOffset))
                 {
                   ProcessXmlText4Number(tagsOffset);
@@ -452,131 +871,132 @@ createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr
                 {
                   if (ELEMENT_OPENED(value))
                     {
-		      xmlChar *osVersionStr = xmlTextReaderReadString(xmlReader);
-		      if (!osVersionStr)
-			{
-			  fprintf(stderr,
-				  "%s: error: cannot get osVersion text value at %d:%d\n",
-				  progname,
-				  xmlTextReaderGetParserColumnNumber(xmlReader),
-				  xmlTextReaderGetParserLineNumber(xmlReader));
-			  pc = -1;
-			  break;
-			}
-		      errno = 0;
-		      if (osVersionStr[0] == '0' && (osVersionStr[1] | 0x80) == 'x')
-			ctxt->osVersion = strtol((const char *)osVersionStr, (char **)NULL, 16);
-		      else if (osVersionStr[0] == 'b')
-			ctxt->osVersion = strtol((const char *)osVersionStr, (char **)NULL, 2);
-		      else if (osVersionStr[0] == '0')
-			ctxt->osVersion = strtol((const char *)osVersionStr, (char **)NULL, 8);
-		      else
-			ctxt->osVersion = strtol((const char *)osVersionStr, (char **)NULL, 10);
-		      if (errno)
-			{
-			  perror("invalid osVersion format");
-			  fprintf(stderr,
-				  "%s: error: invalid osVersion format %d:%d\n",
-				  progname,
-				  xmlTextReaderGetParserColumnNumber(xmlReader),
-				  xmlTextReaderGetParserLineNumber(xmlReader));
-			  pc = -1;
-			  break;
-			}
-		      free((void *)osVersionStr);
+                      xmlChar *osVersionStr = xmlTextReaderReadString(xmlReader);
+                      if (!osVersionStr)
+                        {
+                          fprintf(stderr,
+                                  "%s: error: cannot get osVersion text value at %d:%d\n",
+                                  progname,
+                                  xmlTextReaderGetParserColumnNumber(xmlReader),
+                                  xmlTextReaderGetParserLineNumber(xmlReader));
+                          pc = -1;
+                          break;
+                        }
+                      errno = 0;
+                      ctxt->osVersion = strtoul((const char *)osVersionStr, (char **)NULL, 0);
+                      if (errno)
+                        {
+                          perror("invalid osVersion format");
+                          fprintf(stderr,
+                                  "%s: error: couldn't convert osVersion value at (%d:%d)\n",
+                                  progname,
+                                  xmlTextReaderGetParserColumnNumber(xmlReader),
+                                  xmlTextReaderGetParserLineNumber(xmlReader));
+                          pc = -1;
+                        }
+                      else
+                        fprintf(stdout,
+                                "%s: osVersion = %lu(0x%08lx)\n",
+                                progname,
+                                (unsigned long int)ctxt->osVersion,
+                                (unsigned long int)ctxt->osVersion);
+                      free((void *)osVersionStr);
                     }
                   else if (ELEMENT_OPENED(major))
                     {
-		      /* */
+                      /* discarded */
                     }
                   else if (ELEMENT_OPENED(minor))
                     {
-		      /* */
+                      /* discarded */
                     }
                   else if (ELEMENT_OPENED(micro))
                     {
-		      /* */
+                      /* discarded */
                     }
                   else if (ELEMENT_OPENED(valueStr))
                     {
-		      /* */
+                      /* discarded */
                     }
                   else if (ELEMENT_OPENED(comment))
                     {
-		      /* */
+                      /* discarded */
                     }
                 }
               else if (ELEMENT_OPENED(boardOsPatchLvl))
                 {
                   if (ELEMENT_OPENED(value))
                     {
-		      xmlChar *osPatchLvlStr = xmlTextReaderReadString(xmlReader);
-		      if (!osPatchLvlStr)
-			{
-			  fprintf(stderr,
-				  "%s: error: cannot get osPatchLvl text value at %d:%d\n",
-				  progname,
-				  xmlTextReaderGetParserColumnNumber(xmlReader),
-				  xmlTextReaderGetParserLineNumber(xmlReader));
-			  pc = -1;
-			  break;
-			}
-		      errno = 0;
-		      if (osPatchLvlStr[0] == '0' && (osPatchLvlStr[1] | 0x80) == 'x')
-			ctxt->osPatchLvl = strtol((const char *)osPatchLvlStr, (char **)NULL, 16);
-		      else if (osPatchLvlStr[0] == 'b')
-			ctxt->osPatchLvl = strtol((const char *)osPatchLvlStr, (char **)NULL, 2);
-		      else if (osPatchLvlStr[0] == '0')
-			ctxt->osPatchLvl = strtol((const char *)osPatchLvlStr, (char **)NULL, 8);
-		      else
-			ctxt->osPatchLvl = strtol((const char *)osPatchLvlStr, (char **)NULL, 10);
-		      if (errno)
-			{
-			  perror("invalid osPatchLvl format");
-			  fprintf(stderr,
-				  "%s: error: invalid osPatchLvl format %d:%d\n",
-				  progname,
-				  xmlTextReaderGetParserColumnNumber(xmlReader),
-				  xmlTextReaderGetParserLineNumber(xmlReader));
-			  pc = -1;
-			  break;
-			}
-		      free((void *)osPatchLvlStr);
+                      xmlChar *osPatchLvlStr = xmlTextReaderReadString(xmlReader);
+                      if (!osPatchLvlStr)
+                        {
+                          fprintf(stderr,
+                                  "%s: error: cannot get osPatchLvl text value at %d:%d\n",
+                                  progname,
+                                  xmlTextReaderGetParserColumnNumber(xmlReader),
+                                  xmlTextReaderGetParserLineNumber(xmlReader));
+                          pc = -1;
+                          break;
+                        }
+                      errno = 0;
+                      ctxt->osPatchLvl = strtoul((const char *)osPatchLvlStr, (char **)NULL, 0);
+                      if (errno)
+                        {
+                          perror("invalid osPatchLvl format");
+                          fprintf(stderr,
+                                  "%s: error: coultn't convert osPatchLvl value at (%d:%d)\n",
+                                  progname,
+                                  xmlTextReaderGetParserColumnNumber(xmlReader),
+                                  xmlTextReaderGetParserLineNumber(xmlReader));
+                          pc = -1;
+                          break;
+                        }
+                      else
+                        fprintf(stdout,
+                                "%s: osPatchLvl = %lu(0x%08lx)\n",
+                                progname,
+                                (unsigned long int)ctxt->osPatchLvl,
+                                (unsigned long int)ctxt->osPatchLvl);
+                      free((void *)osPatchLvlStr);
                     }
                   else if (ELEMENT_OPENED(year))
                     {
-		      /* */
+                      /* discarded */
                     }
                   else if (ELEMENT_OPENED(month))
                     {
-		      /* */
+                      /* discarded */
                     }
                   else if (ELEMENT_OPENED(valueStr))
                     {
-		      /* */
+                      /* discarded */
                     }
                   else if (ELEMENT_OPENED(comment))
                     {
-		      /* */
+                      /* discarded */
                     }
                 }             
+              else if (ELEMENT_OPENED(kernelImageFile))
+                {
+                  ProcessXmlText4String(kernelImageFile, PATH_MAX);
+                }
               else if (ELEMENT_OPENED(ramdiskImageFile))
                 {
-		  ProcessXmlText4String(ramdiskImageFile, PATH_MAX);
+                  ProcessXmlText4String(ramdiskImageFile, PATH_MAX);
                 }
               else if (ELEMENT_OPENED(secondImageFile))
                 {
-		  ProcessXmlText4String(secondImageFile, PATH_MAX);
+                  ProcessXmlText4String(secondImageFile, PATH_MAX);
                 }
               else if (ELEMENT_OPENED(dtbImageFile))
                 {
-		  ProcessXmlText4String(dtbImageFile, PATH_MAX);
+                  ProcessXmlText4String(dtbImageFile, PATH_MAX);
                 }
             }
         }
       
-      /* process bootImage root element */
-      if (IS_ELEMENT(CMDLINE))
+      /* process cmdLine root element */
+      if (IS_ELEMENT(BOOTIMAGE))
         {
           if (ELEMENT_CLOSED(bootImage))
             {
@@ -601,10 +1021,9 @@ createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr
                             "%s: bootImageFile = '%s'\n",
                             progname,
                             ctxt->bootImageFile);
-                  break;
                 }
             }
-          if (ELEMENT_OPENED(bootImage))
+          else if (ELEMENT_OPENED(bootImage))
             {
               /* Create bootImage */
               if (vflag)
@@ -613,10 +1032,10 @@ createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr
           ELEMENT_INCR(bootImage);
         }
 
-      /* process cmdLine */
-      if (IS_ELEMENT(BOOTIMAGE))
-        ELEMENT_INCR(bootImage);
-      
+      /* process bootImage */
+      if (IS_ELEMENT(CMDLINE))
+        ELEMENT_INCR(cmdLine);
+
       /* process boardName */
       if (IS_ELEMENT(BOARDNAME))
         ELEMENT_INCR(boardName);
@@ -636,6 +1055,10 @@ createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr
       /* process ramdiskOffset */
       if (IS_ELEMENT(RAMDISKOFFSET))
         ELEMENT_INCR(ramdiskOffset);
+
+      /* process secondOffset */
+      if (IS_ELEMENT(SECONDOFFSET))
+        ELEMENT_INCR(secondOffset);
 
       /* process tagsOffset */
       if (IS_ELEMENT(TAGSOFFSET))
@@ -681,6 +1104,10 @@ createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr
       if (IS_ELEMENT(MONTH))
         ELEMENT_INCR(month);
 
+      /* process kernelImageFile */
+      if (IS_ELEMENT(KERNELIMAGEFILE))
+        ELEMENT_INCR(kernelImageFile);
+
       /* process ramdiskImageFile */
       if (IS_ELEMENT(RAMDISKIMAGEFILE))
         ELEMENT_INCR(ramdiskImageFile);
@@ -712,6 +1139,9 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
 
   bzero((void *)&ctxt, sizeof(bootimgXmlParsingContext_t));
 
+  ctxt.pageSize = BOOTIMG_DEFAULT_PAGESIZE;
+  ctxt.baseAddr = BOOTIMG_DEFAULT_BASEADDR;
+
   xmlReader = xmlReaderForFile(filename, NULL, 0);
   if (xmlReader == (xmlTextReaderPtr)NULL)
     fprintf(stderr, "%s: error: cannot create xml reader for '%s'!\n", progname, filename);
@@ -719,6 +1149,8 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
   else
     {
       int rc, pc;
+
+      xmlTextReaderSetErrorHandler(xmlReader, readerErrorFunc, (void *)&ctxt);
 
       /* init header struct */
       hdr = initBootImgHeader(&ctxt.hdr);
@@ -732,12 +1164,15 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
         }
       while (rc == 1 && pc == 1);
 
+      /* An error was detected by parser */
       if (rc < 0)
         fprintf(stderr,
                 "%s: error: Parsing Failed! Malformed XML file at %d:%d!\n",
                 progname,
                 xmlTextReaderGetParserColumnNumber(xmlReader),
                 xmlTextReaderGetParserLineNumber(xmlReader));
+
+      /* An inconsistency in values was detected */
       if (pc < 0)
         fprintf(stderr,
                 "%s: error: Parsing Failed! Inconsistent XML metadata at %d:%d!\n",
@@ -751,6 +1186,45 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
         xmlFreeDoc(xmlDoc);
 
       xmlFreeTextReader(xmlReader);
+
+      /* xml file was successfully parsed: create image */
+      if (rc == 0 && pc == 1)
+        {
+          if (writeImage(&ctxt) < 0)
+            fprintf(stderr,
+                    "%s: error: couldn't write image file at '%s'\n",
+                    progname,
+                    ctxt.bootImageFile);
+          else if (vflag)
+            fprintf(stdout,
+                    "%s: image '%s' written!\n",
+                    progname,
+                    ctxt.bootImageFile);
+        }
+
+      /* release ctxt */
+      if (ctxt.boardName)
+        free((void *)ctxt.boardName);
+      ctxt.boardName = NULL;
+      if (ctxt.bootImageFile)
+        free((void *)ctxt.bootImageFile);
+      ctxt.bootImageFile = NULL;
+      if (ctxt.cmdLine)
+        free((void *)ctxt.cmdLine);
+      ctxt.cmdLine = NULL;
+      if (ctxt.dtbImageFile)
+        free((void *)ctxt.dtbImageFile);
+      ctxt.dtbImageFile = NULL;
+      if (ctxt.kernelImageFile)
+        free((void *)ctxt.kernelImageFile);
+      ctxt.kernelImageFile = NULL;
+      if (ctxt.ramdiskImageFile)
+        free((void *)ctxt.ramdiskImageFile);
+      ctxt.ramdiskImageFile = NULL;
+      if (ctxt.secondImageFile)
+        free((void *)ctxt.secondImageFile);
+      ctxt.secondImageFile = NULL;
+      bzero((void *)&ctxt, sizeof(bootimgXmlParsingContext_t));
     }
 }
 
@@ -837,12 +1311,12 @@ createBootImageFromJsonMetadata(const char *filename, const char *outdir)
 
                   /*
                    * TODO
-                   * get all fields from json doc and set them in header struct
+                   * get all fields from json doc and set them in json parsing context struct
                    */
                   
                   /* Open image file */
                   imgfp = fopen(bootImageFile, "wb");
-                  if (imgfp = (FILE *)NULL)
+                  if (imgfp == (FILE *)NULL)
                     {
                       /* Failed! cleanup */
                       fprintf(stderr,
