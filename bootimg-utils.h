@@ -22,7 +22,7 @@
 #include "bootimg.h"
 
 struct boot_img_hdr *initBootImgHeader(struct boot_img_hdr *);
-const char *getLongOptionName(char);
+const char *getLongOptionName(struct option *, char);
 const char *getImageFilename(const char *, const char *, int);
 
 #endif /* __BOOTIMG_UTILS_H__ */
