@@ -38,10 +38,10 @@ bootimg-create: $(BOOTIMG_CREATE_OBJS)
 	$(CC) $(CFLAGS) $(BOOTIMG_CREATE_OBJS) -o $@ $(BOOTIMG_LDFLAGS) $(foreach lib,$(BOOTIMG_LDLIBS),-l$(lib)) -lm
 
 ## Depends (not generated -- pls maintain)
-bootimg-create.c: bootimg-utils.c bootimg.h bootimg-utils.h bootimg-priv.h
+bootimg-create.o: bootimg-create.c bootimg-utils.c bootimg.h bootimg-utils.h bootimg-priv.h
 
-bootimg-extract.c: bootimg-utils.c bootimg.h bootimg-utils.h bootimg-priv.h
+bootimg-extract.o: bootimg-extract.c bootimg-utils.c bootimg.h bootimg-utils.h bootimg-priv.h
 
-bootimg-utils.c: bootimg-utils.h bootimg.h bootimg-priv.h
+bootimg-utils.o: bootimg-utils.c bootimg-utils.h bootimg.h bootimg-priv.h
 
-cJSON.c: cJSON.h
+cJSON.o: cJSON.c cJSON.h

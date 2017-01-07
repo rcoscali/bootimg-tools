@@ -28,6 +28,10 @@
 #define BOOTIMG_DEFAULT_SECOND_OFFSET   0xf00000UL
 #define BOOTIMG_DEFAULT_TAGS_OFFSET     0x100UL
 
+/* OS Version masks */
+#define BOOTIMG_OSVERSION_MASK 0x1ffff
+#define BOOTIMG_OSPATCHLVL_MASK 0x7ff
+
 /* XML/JSON default encoding */
 #define BOOTIMG_ENCODING "ISO-8859-1"
 
@@ -97,10 +101,11 @@
 
 #define ELEMENT_OPENED(x)               ctxt->x##Flag == ELEMENT_FLAG_OPENED
 
-#define IS_ELEMENT(x)                                   \
-  !memcmp((void *)localName,                            \
-          (const void *)BOOTIMG_XMLELT_##x##_NAME,      \
-          (size_t)sizeof(BOOTIMG_XMLELT_##x##_NAME)-1)
+#define IS_ELEMENT(x)                                                   \
+  !memcmp((void *)localName,                                            \
+          (const void *)BOOTIMG_XMLELT_##x##_NAME,                      \
+          (size_t)sizeof(BOOTIMG_XMLELT_##x##_NAME)-1) &&               \
+  strlen(localName) == strlen(BOOTIMG_XMLELT_##x##_NAME)
 
 #define ProcessXmlText4String(x, l)                                     \
   xmlChar *x##Str = xmlTextReaderReadString(xmlReader);                 \

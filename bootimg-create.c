@@ -24,6 +24,7 @@
 #include <fcntl.h>
 #include <alloca.h>
 #include <errno.h>
+#include <error.h>
 
 #include <openssl/sha.h>
 #include <libxml/xmlreader.h>
@@ -40,17 +41,12 @@
  * Options flags & values
  * - v: verbose. vflag € N+*
  * - o: outdir. oflag € [0, 1]
- * - x: xml metadata file. xflag € [0, 1]
- * - j: json metadata file. jflag € [0, 1]
+ * - i: display image id. iflag € [0, 1]
  * - p: page size. pflag € [0, 1]
- * - n: basename for metadata file. nflag € [0, 1]
  * - f: force overwrite. fflag € [0, 1]
  */
 int vflag = 0;
 int oflag = 0;
-int xflag = 0;
-int jflag = 0;
-int nflag = 0;
 int pflag = 0;
 int fflag = 0;
 int iflag = 0;
@@ -73,7 +69,7 @@ char *blankname = (char *)NULL;
  * Usage string
  */
 static const char *progusage =
-  "usage: %s --verbose[=<lvl>] ...] [--force] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] imgfile1 [imgfile2 ...]\n"
+  "usage: %s --verbose[=<lvl>] ...] [--force] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] metadatafile1 [metadatafile2 ...]\n"
   "       %s --help                                                                                         \n"
   "                                                                                                         \n"
   "       with the following options                                                                        \n"
@@ -82,16 +78,10 @@ static const char *progusage =
   "       %s                       If omited, one is assumed. More verbose flags imply more verbosity.      \n"
   "       %s --outdir|-o <outdir>: Save potentially big image files in the <outdir> directory               \n"
   "       %s                       Impacted images are kernel, ramdisk, second bootloader & dtb             \n"
-  "       %s --xml|-x            : generate an xml metadata file.                                           \n"
-  "       %s                       This option is exclusive with json.                                      \n"
-  "       %s                       Only the last one will be taken into account.                            \n"
-  "       %s --json|-j           : generate a json metadata file.                                           \n"
-  "       %s                       This option is exclusive with xml.                                       \n"
-  "       %s                       Only the last one will be taken into account.                            \n"
   "       %s --pagesize|-p <pgsz>: Image page size. If not providedn, use the one specified in the file     \n"
   "       %s --identify|-i       : display the ID field for this boot image.                                \n"
-  "       %s --name|-n <basename>: provide a basename template for the metadata file.                       \n"
-  "       %s --help|-h           : display this message.                                                    \n";
+  "       %s --help|-h           : display this message.                                                    \n"
+  "       %s The metadata files are either xml or json files as created by bootimg-extract command.         \n";
 
 /*
  * Long options struct
@@ -101,14 +91,11 @@ struct option long_options[] = {
   {"force",    no_argument,       0,  'f' },
   {"identify", no_argument,       0,  'i' },
   {"outdir",   required_argument, 0,  'o' },
-  {"name",     required_argument, 0,  'n' },
-  {"xml",      no_argument,       0,  'x' },
-  {"json",     no_argument,       0,  'j' },
   {"pagesize", required_argument, 0,  'p' },
   {"help",     no_argument,       0,  'h' },
   {0,          0,                 0,   0  }
 };
-#define BOOTIMG_OPTSTRING "v::fio:n:xjh:"
+#define BOOTIMG_OPTSTRING "v::fio:h:"
 const char *unknown_option = "????";
 
 /* padding buffer */
@@ -118,7 +105,7 @@ static unsigned char padding[0x20000] = { 0, };
  * Getopt external defs
  */
 extern char *optarg;
-extern int optind, opterr, optopt;
+extern int optind;
 
 /*
  * errno
@@ -267,13 +254,57 @@ void
 setHeaderValuesFromParsingContext(bootimgXmlParsingContext_p ctxt)
 {
   ctxt->hdr.page_size = ctxt->pageSize;
+  if (vflag > 2)
+    {
+	  fprintf(stdout, "%s: hdr.page_size = 0x%x\n", progname, ctxt->hdr.page_size);
+	  fprintf(stdout, "%s: ctxt->kernelOffset = 0x%lx\n", progname, ctxt->kernelOffset);
+    }
 
   ctxt->hdr.kernel_addr  = ctxt->baseAddr + ctxt->kernelOffset;
+  if (vflag > 2)
+    fprintf(stdout,
+    		"%s: hdr.kernel_addr = baseAddr (0x%lx) + kernelOffset (0x%lx) = 0x%x\n",
+			progname, ctxt->baseAddr, ctxt->kernelOffset, ctxt->hdr.kernel_addr);
   ctxt->hdr.ramdisk_addr = ctxt->baseAddr + ctxt->ramdiskOffset;
+  if (vflag > 2)
+    fprintf(stdout,
+    		"%s: hdr.ramdisk_addr = baseAddr (0x%lx) + ramdiskOffset (0x%lx) = 0x%x\n",
+			progname, ctxt->baseAddr, ctxt->ramdiskOffset, ctxt->hdr.ramdisk_addr);
   ctxt->hdr.second_addr  = ctxt->baseAddr + ctxt->secondOffset;
+  if (vflag > 2)
+    fprintf(stdout,
+    		"%s: hdr.second_addr = baseAddr (0x%lx) + secondOffset (0x%lx) = 0x%x\n",
+			progname, ctxt->baseAddr, ctxt->secondOffset, ctxt->hdr.second_addr);
   ctxt->hdr.tags_addr    = ctxt->baseAddr + ctxt->tagsOffset;
+  if (vflag > 2)
+    fprintf(stdout,
+    		"%s: hdr.tags_addr = baseAddr (0x%lx) + tagsOffset (0x%lx) = 0x%x\n",
+			progname, ctxt->baseAddr, ctxt->tagsOffset, ctxt->hdr.tags_addr);
 
-  ctxt->hdr.os_version = (ctxt->osVersion << 11) | ctxt->osPatchLvl;
+  if (vflag > 2)
+    fprintf(stdout,
+    		"%s: ctxt->osVersion = 0x%x  ctxt->osPatchLvl = 0x%x\n",
+			progname, ctxt->osVersion, ctxt->osPatchLvl);
+  ctxt->hdr.os_version = ((ctxt->osVersion & BOOTIMG_OSVERSION_MASK) << 11) |
+                         (ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK);
+  if (vflag > 2)
+    {
+      fprintf(stdout,
+    	  	  "%s: ctxt->osVersion & 0x1ffff = 0x%x\n",
+			  progname, ctxt->osVersion & BOOTIMG_OSVERSION_MASK);
+      fprintf(stdout,
+    	  	  "%s: (ctxt->osVersion & 0x1ffff) << 11 = 0x%x\n",
+			  progname, (ctxt->osVersion & BOOTIMG_OSVERSION_MASK) << 11);
+      fprintf(stdout,
+    	  	  "%s: ctxt->osPatchLvl & 0x7FF = 0x%x\n",
+			  progname, ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK);
+      fprintf(stdout,
+    	  	  "%s: ctxt->hdr.os_version = ((ctxt->osVersion & 0x1ffff) << 11) | (ctxt->osPatchLvl&0x7ff) = 0x%x\n",
+			  progname, ((ctxt->osVersion & BOOTIMG_OSVERSION_MASK) << 11) | (ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK));
+      fprintf(stdout,
+    	  	  "%s: ctxt->hdr.os_version = 0x%x\n",
+			  progname, ctxt->hdr.os_version);
+    }
 
   if (strlen(ctxt->cmdLine) > BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE)
     {
@@ -600,20 +631,6 @@ main(int argc, char **argv)
           }
           break;
           
-        case 'x':
-          xflag = 1;
-          if (vflag > 3)
-            fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-                    progname, getLongOptionName(long_options, c), c, xflag);
-          break;
-          
-        case 'j':
-          jflag = 1;
-          if (vflag > 3)
-            fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-                    progname, getLongOptionName(long_options, c), c, jflag);
-          break;
-          
         case 'i':
           iflag = 1;
           if (vflag > 3)
@@ -621,14 +638,6 @@ main(int argc, char **argv)
                     progname, getLongOptionName(long_options, c), c, iflag);
           break;
           
-        case 'n':
-          nflag = 1;
-          nval = optarg;
-          if (vflag > 3)
-            fprintf(stderr, "%s: option %s/%c (=%d) set with value '%s'\n",
-                    progname, getLongOptionName(long_options, c), c, nflag, nval);
-          break;
-
         case 'p':
           pflag = 1;
           pval = strtol(optarg, NULL, 10);
@@ -649,13 +658,6 @@ main(int argc, char **argv)
         }
     }
 
-  if (xflag && jflag)
-    {
-      fprintf(stderr, "%s: error: options x and j are mutually exclusive !\n", progname);
-      printusage();
-      exit(1);
-    }
-  
   if (vflag > 3)
     {
       fprintf(stderr, "%s: optind = %d\n", progname, optind);

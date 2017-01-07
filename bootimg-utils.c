@@ -88,7 +88,7 @@ getImageFilename(const char *basename, const char *outdir, int kind)
       break;
     case BOOTIMG_KERNEL_FILENAME:
       sprintf(pathname,
-	      basenameIsAbsolute ? "%s.img" : "%s/%s.img",
+	      basenameIsAbsolute ? "%s.img" : "%s/%s.zImage",
 	      basenameIsAbsolute ? basename : outdir,
 	      basename);
       if (vflag > 2)

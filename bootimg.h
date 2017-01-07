@@ -100,7 +100,7 @@ struct boot_img_hdr
     uint32_t dt_size;      /* device tree in bytes */
 
     /* operating system version and security patch level; for
-     * version "A.B.C" and patch level "Y-M-D":
+     * version "A.B.C" and patch level "Y-M":
      * ver = A << 14 | B << 7 | C         (7 bits for each of A, B, C)
      * lvl = ((Y - 2000) & 127) << 4 | M  (7 bits for Y, 4 bits for M)
      * os_version = ver << 11 | lvl */

@@ -126,7 +126,7 @@ const char *unknown_option = "????";
  * Getopt external defs
  */
 extern char *optarg;
-extern int optind, opterr, optopt;
+extern int optind;
 
 /*
  * Forward decl
@@ -285,7 +285,10 @@ main(int argc, char **argv)
         /* 
          *
          */
-        extractBootImageMetadata(argv[optind++], oval);
+        if (extractBootImageMetadata(argv[optind++], oval))
+          fprintf(stdout, "%s: image data successfully extracted from '%s'\n", progname, argv[optind-1]);
+        else if (vflag)
+          fprintf(stderr, "%s: error: image data extraction failure for '%s'\n", progname, argv[optind-1]);
 
       /*
        * Cleanup function for the XML library.
@@ -363,7 +366,7 @@ extractKernelImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *
             "%s: error: cannot open kernel image file '%s' for writing !\n",
             progname, filename);
 
-  return(readsz);
+  return(readsz * hdr->kernel_size);
 }
 
 /*
@@ -396,7 +399,7 @@ extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char 
             "%s: error: cannot open ramdisk image file '%s' for writing !\n",
             progname, filename);
   
-  return(readsz);
+  return(readsz * hdr->ramdisk_size);
 }
 
 /*
@@ -429,7 +432,7 @@ extractSecondBootloaderImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, co
             "%s: error: cannot open second bootloader image file '%s' for writing !\n",
             progname, filename);
   
-  return(readsz);
+  return(readsz * hdr->second_size);
 }
 
 /*
@@ -462,7 +465,7 @@ extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const ch
             "%s: error: cannot open device tree binary image file '%s' for writing !\n",
             progname, filename);
   
-  return(readsz);
+  return(readsz * hdr->dt_size);
 }
 
 /*
@@ -471,6 +474,7 @@ extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const ch
 int
 extractBootImageMetadata(const char *imgfile, const char *outdir)
 {
+  int rc = 0;
   boot_img_hdr header, *hdr = (boot_img_hdr *)NULL;
   FILE *imgfp = (FILE *)NULL, *xfp = (FILE *)NULL, *jfp = (FILE *)NULL;
   off_t offset = 0;
@@ -526,7 +530,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 xml_filename = (const char *)NULL;
                 break;
               }
-            rc = xmlTextWriterStartElement(xmlWriter, BAD_CAST "bootImage");
+            rc = xmlTextWriterStartElement(xmlWriter, BAD_CAST BOOTIMG_XMLELT_BOOTIMAGE_NAME);
             if (rc < 0)
               {
                 fprintf(stderr, "%s: error: cannot start the bootImage root element !\n", progname);
@@ -535,7 +539,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 xml_filename = (const char *)NULL;
                 break;
               }
-            const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
+            const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_BOOTIMG_FILENAME);
             xmlTextWriterWriteAttribute(xmlWriter, "bootImageFile", tmpfname);
             free((void *)tmpfname);
           }
@@ -560,7 +564,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 jfp = (FILE *)NULL;
                 break;          
               }
-            const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
+            const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_BOOTIMG_FILENAME);
             cJSON_AddItemToObject(jsonDoc, "bootImageFile", cJSON_CreateString(tmpfname));
             free((void *)tmpfname);         
           }
@@ -586,6 +590,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
           int year, month;
           char boardOsVersionStr[100], boardOsPatchLvlStr[100];
           
+          fprintf(stdout, "%s: HDR.os_version = 0x%08x\n", progname, hdr->os_version);
           os_version = hdr->os_version >> 11;
           os_patch_level = hdr->os_version&0x7ff;
           
@@ -608,70 +613,98 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
             do
               {
                 /* cmdLine */
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "cmdLine", "%s", hdr->cmdline) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_CMDLINE_NAME,
+						    "%s", hdr->cmdline) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for cmdLine\n", progname);
                 
                 /* boardName */
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "boardName", "%s", hdr->name) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_BOARDNAME_NAME,
+						    "%s", hdr->name) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for boardName\n", progname);
 
                 /* baseAddr */
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "baseAddr", "0x%08lx", base_addr) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_BASEADDR_NAME,
+						    "0x%08lx", base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for baseAddr\n", progname);
                 
                 /* pageSize */
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "pageSize", "%d", hdr->page_size) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_PAGESIZE_NAME,
+						    "%d", hdr->page_size) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for pageSize\n", progname);
 
                 /* kernelOffset */
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "kernelOffset", "0x%08lx", hdr->kernel_addr - base_addr) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_KERNELOFFSET_NAME,
+						    "0x%08lx", hdr->kernel_addr - base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for kernelOffset\n", progname);
                 
                 /* ramdiskOffset */
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "ramdiskOffset", "0x%08lx", hdr->ramdisk_addr - base_addr) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_RAMDISKOFFSET_NAME,
+						    "0x%08lx", hdr->ramdisk_addr - base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for ramdiskOffset\n", progname);
                 
                 /* secondOffset */
                 if (hdr->second_size != 0 &&
-                    xmlTextWriterWriteFormatElement(xmlWriter, "secondOffset", "0x%08lx", hdr->second_addr - base_addr) < 0)
-                  fprintf(stderr, "%s: error: cannot create xml element for secondBootloaderSize\n", progname);
+                    xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_SECONDOFFSET_NAME,
+						    "0x%08lx", hdr->second_addr - base_addr) < 0)
+                  fprintf(stderr, "%s: error: cannot create xml element for secondOffset\n", progname);
 
                 /* tagsOffset */
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "tagsOffset", "0x%08lx", hdr->tags_addr - base_addr) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_TAGSOFFSET_NAME,
+						    "0x%08lx", hdr->tags_addr - base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for tagsOffset\n", progname);
                 
                 /* Add boardOsVersion element */
-                if (xmlTextWriterStartElement(xmlWriter, "boardOsVersion") < 0)
+                if (xmlTextWriterStartElement(xmlWriter, BOOTIMG_XMLELT_BOARDOSVERSION_NAME) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "value", "%d", os_version) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_VALUE_NAME,
+						    "0x%x", os_version) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion value\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "major", "%d", major) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_MAJOR_NAME,
+						    "%d", major) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion major\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "minor", "%d", minor) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_MINOR_NAME,
+						    "%d", minor) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion minor\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "micro", "%d", micro) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_MICRO_NAME,
+						    "%d", micro) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion micro\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "valueStr", "%s", boardOsVersionStr) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_VALUESTR_NAME,
+						    "%s", boardOsVersionStr) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion valueStr\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "comment", "%s", BOARD_OS_VERSION_COMMENT) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_COMMENT_NAME,
+						    "%s", BOARD_OS_VERSION_COMMENT) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion comment\n", progname);
                     break;
@@ -683,32 +716,42 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                   }
                 
                 /* Add boardOsPatchLvl element */
-                if (xmlTextWriterStartElement(xmlWriter, "boardOsPatchLvl") < 0)
+                if (xmlTextWriterStartElement(xmlWriter, BOOTIMG_XMLELT_BOARDOSPATCHLVL_NAME) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "value", "%d", os_patch_level) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_VALUE_NAME,
+						    "0x%x", os_patch_level) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl value\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "year", "%d", year) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_YEAR_NAME,
+						    "%d", year) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl year\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "month", "%d", month) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_MONTH_NAME,
+						    "%d", month) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl month\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "valueStr", "%s", boardOsPatchLvlStr) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_VALUESTR_NAME,
+						    "%s", boardOsPatchLvlStr) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl valueStr\n", progname);
                     break;
                   }
-                if (xmlTextWriterWriteFormatElement(xmlWriter, "comment", "%s", BOARD_OS_PATCH_LEVEL_COMMENT) < 0)
+                if (xmlTextWriterWriteFormatElement(xmlWriter,
+						    BOOTIMG_XMLELT_COMMENT_NAME,
+						    "%s", BOARD_OS_PATCH_LEVEL_COMMENT) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl comment\n", progname);
                     break;
@@ -726,23 +769,23 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
               {
                 cJSON *boardOsVersion, *boardOsPatchLvl;
                 
-                cJSON_AddItemToObject(jsonDoc, "cmdLine", cJSON_CreateString(hdr->cmdline));
-                cJSON_AddItemToObject(jsonDoc, "boardName", cJSON_CreateString(hdr->name));
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_CMDLINE_NAME, cJSON_CreateString(hdr->cmdline));
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_BOARDNAME_NAME, cJSON_CreateString(hdr->name));
                 sprintf(tmp, "0x%08lx", base_addr);
-                cJSON_AddItemToObject(jsonDoc, "baseAddr", cJSON_CreateString(tmp));
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_BASEADDR_NAME, cJSON_CreateString(tmp));
                 sprintf(tmp, "%d", hdr->page_size);
-                cJSON_AddItemToObject(jsonDoc, "pageSize", cJSON_CreateString(tmp));
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_PAGESIZE_NAME, cJSON_CreateString(tmp));
                 sprintf(tmp, "0x%08lx", hdr->kernel_addr - base_addr);
-                cJSON_AddItemToObject(jsonDoc, "kernelOffset", cJSON_CreateString(tmp));
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_KERNELOFFSET_NAME, cJSON_CreateString(tmp));
                 sprintf(tmp, "0x%08lx", hdr->ramdisk_addr - base_addr);
-                cJSON_AddItemToObject(jsonDoc, "ramdiskOffset", cJSON_CreateString(tmp));
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_RAMDISKOFFSET_NAME, cJSON_CreateString(tmp));
                 if (hdr->second_size != 0)
                   {
                     sprintf(tmp, "0x%08lx", hdr->second_addr - base_addr);
-                    cJSON_AddItemToObject(jsonDoc, "secondOffset", cJSON_CreateString(tmp));
+                    cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_SECONDOFFSET_NAME, cJSON_CreateString(tmp));
                   }
                 sprintf(tmp, "0x%08lx", hdr->tags_addr - base_addr);
-                cJSON_AddItemToObject(jsonDoc, "tagsOffset", cJSON_CreateString(tmp));
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_TAGSOFFSET_NAME, cJSON_CreateString(tmp));
                 
                 boardOsVersion = cJSON_CreateObject();
                 if (!boardOsVersion)
@@ -750,14 +793,14 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                     fprintf(stderr, "%s: error: cannot create json object for boardOsVersion", progname);
                     break;
                   }
-                cJSON_AddItemToObject(boardOsVersion, "value", cJSON_CreateNumber(os_version));
-                cJSON_AddItemToObject(boardOsVersion, "major", cJSON_CreateNumber(major));
-                cJSON_AddItemToObject(boardOsVersion, "minor", cJSON_CreateNumber(minor));
-                cJSON_AddItemToObject(boardOsVersion, "micro", cJSON_CreateNumber(micro));
-                cJSON_AddItemToObject(boardOsVersion, "valueStr", cJSON_CreateString(boardOsVersionStr));
-                cJSON_AddItemToObject(boardOsVersion, "comment", cJSON_CreateString(BOARD_OS_VERSION_COMMENT));
+                cJSON_AddItemToObject(boardOsVersion, BOOTIMG_XMLELT_VALUE_NAME, cJSON_CreateNumber(os_version));
+                cJSON_AddItemToObject(boardOsVersion, BOOTIMG_XMLELT_MAJOR_NAME, cJSON_CreateNumber(major));
+                cJSON_AddItemToObject(boardOsVersion, BOOTIMG_XMLELT_MINOR_NAME, cJSON_CreateNumber(minor));
+                cJSON_AddItemToObject(boardOsVersion, BOOTIMG_XMLELT_MICRO_NAME, cJSON_CreateNumber(micro));
+                cJSON_AddItemToObject(boardOsVersion, BOOTIMG_XMLELT_VALUESTR_NAME, cJSON_CreateString(boardOsVersionStr));
+                cJSON_AddItemToObject(boardOsVersion, BOOTIMG_XMLELT_COMMENT_NAME, cJSON_CreateString(BOARD_OS_VERSION_COMMENT));
 
-                cJSON_AddItemToObject(jsonDoc, "boardOsVersion", boardOsVersion);
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_BOARDOSVERSION_NAME, boardOsVersion);
                 
                 boardOsPatchLvl = cJSON_CreateObject();
                 if (!boardOsPatchLvl)
@@ -766,13 +809,13 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                     cJSON_Delete(boardOsPatchLvl);
                     break;
                   }
-                cJSON_AddItemToObject(boardOsPatchLvl, "value", cJSON_CreateNumber(os_patch_level));
-                cJSON_AddItemToObject(boardOsPatchLvl, "year", cJSON_CreateNumber(year));
-                cJSON_AddItemToObject(boardOsPatchLvl, "month", cJSON_CreateNumber(month));
-                cJSON_AddItemToObject(boardOsPatchLvl, "valueStr", cJSON_CreateString(boardOsPatchLvlStr));
-                cJSON_AddItemToObject(boardOsPatchLvl, "comment", cJSON_CreateString(BOARD_OS_PATCH_LEVEL_COMMENT));
+                cJSON_AddItemToObject(boardOsPatchLvl, BOOTIMG_XMLELT_VALUE_NAME, cJSON_CreateNumber(os_patch_level));
+                cJSON_AddItemToObject(boardOsPatchLvl, BOOTIMG_XMLELT_YEAR_NAME, cJSON_CreateNumber(year));
+                cJSON_AddItemToObject(boardOsPatchLvl, BOOTIMG_XMLELT_MONTH_NAME, cJSON_CreateNumber(month));
+                cJSON_AddItemToObject(boardOsPatchLvl, BOOTIMG_XMLELT_VALUESTR_NAME, cJSON_CreateString(boardOsPatchLvlStr));
+                cJSON_AddItemToObject(boardOsPatchLvl, BOOTIMG_XMLELT_COMMENT_NAME, cJSON_CreateString(BOARD_OS_PATCH_LEVEL_COMMENT));
                 
-                cJSON_AddItemToObject(jsonDoc, "boardOsPatchLvl", boardOsPatchLvl);
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_BOARDOSPATCHLVL_NAME, boardOsPatchLvl);
               }
             while(0);
         }         
@@ -801,17 +844,24 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
       total_read += hdr->kernel_size;
       total_read += readPadding(imgfp, hdr->kernel_size, pval);
 
+      const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
+      if (xflag)
+        xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, "%s", tmpfname);
+      if (jflag)
+        cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
+      free((void *)tmpfname);
+
       size_t ramdisk_sz = extractRamdiskImage(imgfp, hdr, outdir, basename);
       if (vflag && ramdisk_sz)
         {
           fprintf(stdout, "%s: %lu bytes ramdisk image extracted!\n", progname, ramdisk_sz);
         }
 
-      const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
+      tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
       if (xflag)
-        xmlTextWriterWriteFormatElement(xmlWriter, "ramdiskImageFile", "%s", tmpfname);
+        xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_RAMDISKIMAGEFILE_NAME, "%s", tmpfname);
       if (jflag)
-        cJSON_AddItemToObject(jsonDoc, "ramdiskImageFile", cJSON_CreateString(tmpfname));
+        cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_RAMDISKIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
       free((void *)tmpfname);
 
       total_read += hdr->ramdisk_size;
@@ -847,9 +897,9 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 
           tmpfname = getImageFilename(basename, outdir, BOOTIMG_DTB_FILENAME);
           if (xflag)
-            xmlTextWriterWriteFormatElement(xmlWriter, "dtbImageFile", "%s", tmpfname);
+            xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, "%s", tmpfname);
           if (jflag)
-            cJSON_AddItemToObject(jsonDoc, "dtbImageFile", cJSON_CreateString(tmpfname));
+            cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
           free((void *)tmpfname);
 
           total_read += hdr->dt_size;
@@ -881,6 +931,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
           }
         while (0);
 
+      rc = 1;
+
     exit_on_error:
       fclose(imgfp);
     }
@@ -889,7 +941,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
       fprintf(stderr, "%s: error: Magic not found in file '%s'\n", progname, imgfile);
     }
       
-  return 0;
+  return rc;
 }
   
 boot_img_hdr *
