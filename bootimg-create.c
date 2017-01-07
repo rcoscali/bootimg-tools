@@ -268,30 +268,31 @@ setHeaderValuesFromParsingContext(bootimgXmlParsingContext_p ctxt)
 {
   ctxt->hdr.page_size = ctxt->pageSize;
 
-  ctxt->hdr.kernel_addr = ctxt->baseAddr + ctxt->kernelOffset;
+  ctxt->hdr.kernel_addr  = ctxt->baseAddr + ctxt->kernelOffset;
   ctxt->hdr.ramdisk_addr = ctxt->baseAddr + ctxt->ramdiskOffset;
-  ctxt->hdr.second_addr = ctxt->baseAddr + ctxt->secondOffset;
-  ctxt->hdr.tags_addr = ctxt->baseAddr + ctxt->tagsOffset;
+  ctxt->hdr.second_addr  = ctxt->baseAddr + ctxt->secondOffset;
+  ctxt->hdr.tags_addr    = ctxt->baseAddr + ctxt->tagsOffset;
 
-  ctxt->hdr.os_version = (ctxt->osVersion.<< 11) | ctxt->osPatchLvl;
+  ctxt->hdr.os_version = (ctxt->osVersion << 11) | ctxt->osPatchLvl;
 
   if (strlen(ctxt->cmdLine) > BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE)
     {
       /* truncate */
       strncpy(ctxt->hdr.cmdline, ctxt->cmdLine, BOOT_ARGS_SIZE);
       strncpy(ctxt->hdr.extra_cmdline, &ctxt->cmdLine[BOOT_ARGS_SIZE], BOOT_EXTRA_ARGS_SIZE);
+      fprintf(stderr, "%s: WARNING: command line arguments was truncated to %d characters!\n",
+    		  progname, BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE);
     }
-  if (strlen(ctxt->cmdLine) < BOOT_EXTRA_ARGS_SIZE && BOOT_ARGS_SIZE <= strlen(ctxt->cmdLine) )
+  if (BOOT_ARGS_SIZE < strlen(ctxt->cmdLine) && strlen(ctxt->cmdLine) < BOOT_EXTRA_ARGS_SIZE)
     {
       strncpy(ctxt->hdr.cmdline, ctxt->cmdLine, BOOT_ARGS_SIZE);
       strncpy(ctxt->hdr.extra_cmdline, &ctxt->cmdLine[BOOT_ARGS_SIZE], BOOTIMG_MIN(BOOT_EXTRA_ARGS_SIZE, strlen(ctxt->cmdLine) - BOOT_ARGS_SIZE));
     }
   else
-    {
-      strncpy(ctxt->hdr.cmdline, ctxt->cmdLine, BOOTIMG_MIN(BOOT_ARGS_SIZE, strlen(ctxt->cmdLine)));
-    }
+    strncpy(ctxt->hdr.cmdline, ctxt->cmdLine, BOOTIMG_MIN(BOOT_ARGS_SIZE, strlen(ctxt->cmdLine)));
 
-  strncpy(ctxt->hdr.name, ctxt->boardName, BOOTIMG_MIN(strlen(ctxt->boardName, BOOT_NAME_SIZE)));
+  // Set product name
+  strncpy(ctxt->hdr.name, ctxt->boardName, BOOTIMG_MIN(strlen(ctxt->boardName), BOOT_NAME_SIZE));
 }
 
 /*
