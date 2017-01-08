@@ -122,14 +122,14 @@ extern error_t errno;
 static void *loadImage(const char *, size_t *);
 void *my_malloc_fn(size_t);
 void my_free_fn(void *);
-int writeImage(bootimgXmlParsingContext_p);
+int writeImage(bootimgParsingContext_p);
 void printusage(void);
 void createBootImageFromXmlMetadata(const char *, const char *);
 void createBootImageFromJsonMetadata(const char *, const char *);
 int writePaddingToFd(int, size_t, size_t);
 void writeStringToFile(char *, char *);
 void readerErrorFunc(void *, const char *, xmlParserSeverities, xmlTextReaderLocatorPtr);
-int createBootImageProcessXmlNode(bootimgXmlParsingContext_t *, xmlTextReaderPtr);
+int createBootImageProcessXmlNode(bootimgParsingContext_t *, xmlTextReaderPtr);
 void createBootImageFromXmlMetadata(const char *, const char *);
 void createBootImageFromJsonMetadata(const char *, const char *);
 
@@ -207,7 +207,7 @@ loadImage(const char *filename, size_t *sz_p)
  * then store it in id header field
  */
 void
-updateIdHeaderField(bootimgXmlParsingContext_t *ctxt, data_context_t *dctxt)
+updateIdHeaderField(bootimgParsingContext_t *ctxt, data_context_t *dctxt)
 {
   /* init sha512 context */
   SHA512_CTX sha;
@@ -255,59 +255,59 @@ updateIdHeaderField(bootimgXmlParsingContext_t *ctxt, data_context_t *dctxt)
  * Copy values obtained from parsing to header struct
  */
 void
-setHeaderValuesFromParsingContext(bootimgXmlParsingContext_p ctxt)
+setHeaderValuesFromParsingContext(bootimgParsingContext_p ctxt)
 {
   ctxt->hdr.page_size = ctxt->pageSize;
   if (vflag > 2)
     {
-	  fprintf(stdout, "%s: hdr.page_size = 0x%x\n", progname, ctxt->hdr.page_size);
-	  fprintf(stdout, "%s: ctxt->kernelOffset = 0x%lx\n", progname, ctxt->kernelOffset);
+      fprintf(stdout, "%s: hdr.page_size = 0x%x\n", progname, ctxt->hdr.page_size);
+      fprintf(stdout, "%s: ctxt->kernelOffset = 0x%lx\n", progname, ctxt->kernelOffset);
     }
 
   ctxt->hdr.kernel_addr  = ctxt->baseAddr + ctxt->kernelOffset;
   if (vflag > 2)
     fprintf(stdout,
-    		"%s: hdr.kernel_addr = baseAddr (0x%lx) + kernelOffset (0x%lx) = 0x%x\n",
-			progname, ctxt->baseAddr, ctxt->kernelOffset, ctxt->hdr.kernel_addr);
+            "%s: hdr.kernel_addr = baseAddr (0x%lx) + kernelOffset (0x%lx) = 0x%x\n",
+            progname, ctxt->baseAddr, ctxt->kernelOffset, ctxt->hdr.kernel_addr);
   ctxt->hdr.ramdisk_addr = ctxt->baseAddr + ctxt->ramdiskOffset;
   if (vflag > 2)
     fprintf(stdout,
-    		"%s: hdr.ramdisk_addr = baseAddr (0x%lx) + ramdiskOffset (0x%lx) = 0x%x\n",
-			progname, ctxt->baseAddr, ctxt->ramdiskOffset, ctxt->hdr.ramdisk_addr);
+            "%s: hdr.ramdisk_addr = baseAddr (0x%lx) + ramdiskOffset (0x%lx) = 0x%x\n",
+            progname, ctxt->baseAddr, ctxt->ramdiskOffset, ctxt->hdr.ramdisk_addr);
   ctxt->hdr.second_addr  = ctxt->baseAddr + ctxt->secondOffset;
   if (vflag > 2)
     fprintf(stdout,
-    		"%s: hdr.second_addr = baseAddr (0x%lx) + secondOffset (0x%lx) = 0x%x\n",
-			progname, ctxt->baseAddr, ctxt->secondOffset, ctxt->hdr.second_addr);
+            "%s: hdr.second_addr = baseAddr (0x%lx) + secondOffset (0x%lx) = 0x%x\n",
+            progname, ctxt->baseAddr, ctxt->secondOffset, ctxt->hdr.second_addr);
   ctxt->hdr.tags_addr    = ctxt->baseAddr + ctxt->tagsOffset;
   if (vflag > 2)
     fprintf(stdout,
-    		"%s: hdr.tags_addr = baseAddr (0x%lx) + tagsOffset (0x%lx) = 0x%x\n",
-			progname, ctxt->baseAddr, ctxt->tagsOffset, ctxt->hdr.tags_addr);
+            "%s: hdr.tags_addr = baseAddr (0x%lx) + tagsOffset (0x%lx) = 0x%x\n",
+            progname, ctxt->baseAddr, ctxt->tagsOffset, ctxt->hdr.tags_addr);
 
   if (vflag > 2)
     fprintf(stdout,
-    		"%s: ctxt->osVersion = 0x%x  ctxt->osPatchLvl = 0x%x\n",
-			progname, ctxt->osVersion, ctxt->osPatchLvl);
+            "%s: ctxt->osVersion = 0x%x  ctxt->osPatchLvl = 0x%x\n",
+            progname, ctxt->osVersion, ctxt->osPatchLvl);
   ctxt->hdr.os_version = ((ctxt->osVersion & BOOTIMG_OSVERSION_MASK) << 11) |
-                         (ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK);
+    (ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK);
   if (vflag > 2)
     {
       fprintf(stdout,
-    	  	  "%s: ctxt->osVersion & 0x1ffff = 0x%x\n",
-			  progname, ctxt->osVersion & BOOTIMG_OSVERSION_MASK);
+              "%s: ctxt->osVersion & 0x1ffff = 0x%x\n",
+              progname, ctxt->osVersion & BOOTIMG_OSVERSION_MASK);
       fprintf(stdout,
-    	  	  "%s: (ctxt->osVersion & 0x1ffff) << 11 = 0x%x\n",
-			  progname, (ctxt->osVersion & BOOTIMG_OSVERSION_MASK) << 11);
+              "%s: (ctxt->osVersion & 0x1ffff) << 11 = 0x%x\n",
+              progname, (ctxt->osVersion & BOOTIMG_OSVERSION_MASK) << 11);
       fprintf(stdout,
-    	  	  "%s: ctxt->osPatchLvl & 0x7FF = 0x%x\n",
-			  progname, ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK);
+              "%s: ctxt->osPatchLvl & 0x7FF = 0x%x\n",
+              progname, ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK);
       fprintf(stdout,
-    	  	  "%s: ctxt->hdr.os_version = ((ctxt->osVersion & 0x1ffff) << 11) | (ctxt->osPatchLvl&0x7ff) = 0x%x\n",
-			  progname, ((ctxt->osVersion & BOOTIMG_OSVERSION_MASK) << 11) | (ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK));
+              "%s: ctxt->hdr.os_version = ((ctxt->osVersion & 0x1ffff) << 11) | (ctxt->osPatchLvl&0x7ff) = 0x%x\n",
+              progname, ((ctxt->osVersion & BOOTIMG_OSVERSION_MASK) << 11) | (ctxt->osPatchLvl & BOOTIMG_OSPATCHLVL_MASK));
       fprintf(stdout,
-    	  	  "%s: ctxt->hdr.os_version = 0x%x\n",
-			  progname, ctxt->hdr.os_version);
+              "%s: ctxt->hdr.os_version = 0x%x\n",
+              progname, ctxt->hdr.os_version);
     }
 
   if (strlen(ctxt->cmdLine) > BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE)
@@ -316,7 +316,7 @@ setHeaderValuesFromParsingContext(bootimgXmlParsingContext_p ctxt)
       strncpy(ctxt->hdr.cmdline, ctxt->cmdLine, BOOT_ARGS_SIZE);
       strncpy(ctxt->hdr.extra_cmdline, &ctxt->cmdLine[BOOT_ARGS_SIZE], BOOT_EXTRA_ARGS_SIZE);
       fprintf(stderr, "%s: WARNING: command line arguments was truncated to %d characters!\n",
-    		  progname, BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE);
+              progname, BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE);
     }
   if (BOOT_ARGS_SIZE < strlen(ctxt->cmdLine) && strlen(ctxt->cmdLine) < BOOT_EXTRA_ARGS_SIZE)
     {
@@ -334,7 +334,7 @@ setHeaderValuesFromParsingContext(bootimgXmlParsingContext_p ctxt)
  * Load images, compute last hdr fields and write boot image
  */
 int
-writeImage(bootimgXmlParsingContext_p ctxt)
+writeImage(bootimgParsingContext_p ctxt)
 {
   int rc = -1;
   data_context_t data_ctxt, *dctxt = &data_ctxt;
@@ -662,12 +662,6 @@ main(int argc, char **argv)
         }
     }
 
-  if (vflag > 3)
-    {
-      fprintf(stderr, "%s: optind = %d\n", progname, optind);
-      fprintf(stderr, "%s: argc = %d\n", progname, argc);
-    }
-
   if (optind < argc)
     {
       if (optind != argc -1 && !fflag)
@@ -782,7 +776,7 @@ void readerErrorFunc(void *arg,
                      xmlParserSeverities severity,
                      xmlTextReaderLocatorPtr locator)
 {
-  bootimgXmlParsingContext_p ctxt = (bootimgXmlParsingContext_p)arg;
+  bootimgParsingContext_p ctxt = (bootimgParsingContext_p)arg;
   char severityStr[100];
   
   switch (severity)
@@ -815,7 +809,7 @@ void readerErrorFunc(void *arg,
  * createBootImageFromXmlMetadata
  */
 int 
-createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr xmlReader)
+createBootImageProcessXmlNode(bootimgParsingContext_t *ctxt, xmlTextReaderPtr xmlReader)
 {
   int rc = 1, pc = 1;
   xmlChar *localName = xmlTextReaderLocalName(xmlReader);
@@ -1133,6 +1127,34 @@ createBootImageProcessXmlNode(bootimgXmlParsingContext_t *ctxt, xmlTextReaderPtr
   return rc;
 }
 
+void
+releaseContextContent(bootimgParsingContext_t *ctxt)
+{
+  /* release ctxt */
+  if (ctxt->boardName)
+    free((void *)ctxt->boardName);
+  ctxt->boardName = NULL;
+  if (ctxt->bootImageFile)
+    free((void *)ctxt->bootImageFile);
+  ctxt->bootImageFile = NULL;
+  if (ctxt->cmdLine)
+    free((void *)ctxt->cmdLine);
+  ctxt->cmdLine = NULL;
+  if (ctxt->dtbImageFile)
+    free((void *)ctxt->dtbImageFile);
+  ctxt->dtbImageFile = NULL;
+  if (ctxt->kernelImageFile)
+    free((void *)ctxt->kernelImageFile);
+  ctxt->kernelImageFile = NULL;
+  if (ctxt->ramdiskImageFile)
+    free((void *)ctxt->ramdiskImageFile);
+  ctxt->ramdiskImageFile = NULL;
+  if (ctxt->secondImageFile)
+    free((void *)ctxt->secondImageFile);
+  ctxt->secondImageFile = NULL;
+  bzero((void *)ctxt, sizeof(bootimgParsingContext_t));
+}
+
 /*
  * createBootImageFromXmlMetadata
  */
@@ -1141,10 +1163,10 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
 {
   xmlTextReaderPtr xmlReader;
   xmlDocPtr xmlDoc;
-  bootimgXmlParsingContext_t ctxt;
+  bootimgParsingContext_t ctxt;
   boot_img_hdr *hdr = (boot_img_hdr *)NULL;
 
-  bzero((void *)&ctxt, sizeof(bootimgXmlParsingContext_t));
+  bzero((void *)&ctxt, sizeof(bootimgParsingContext_t));
 
   ctxt.pageSize = BOOTIMG_DEFAULT_PAGESIZE;
   ctxt.baseAddr = BOOTIMG_DEFAULT_BASEADDR;
@@ -1209,30 +1231,121 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
                     ctxt.bootImageFile);
         }
 
-      /* release ctxt */
-      if (ctxt.boardName)
-        free((void *)ctxt.boardName);
-      ctxt.boardName = NULL;
-      if (ctxt.bootImageFile)
-        free((void *)ctxt.bootImageFile);
-      ctxt.bootImageFile = NULL;
-      if (ctxt.cmdLine)
-        free((void *)ctxt.cmdLine);
-      ctxt.cmdLine = NULL;
-      if (ctxt.dtbImageFile)
-        free((void *)ctxt.dtbImageFile);
-      ctxt.dtbImageFile = NULL;
-      if (ctxt.kernelImageFile)
-        free((void *)ctxt.kernelImageFile);
-      ctxt.kernelImageFile = NULL;
-      if (ctxt.ramdiskImageFile)
-        free((void *)ctxt.ramdiskImageFile);
-      ctxt.ramdiskImageFile = NULL;
-      if (ctxt.secondImageFile)
-        free((void *)ctxt.secondImageFile);
-      ctxt.secondImageFile = NULL;
-      bzero((void *)&ctxt, sizeof(bootimgXmlParsingContext_t));
+      releaseContextContent(&ctxt);
     }
+}
+
+int
+processJsonDoc(cJSON *jsonDoc, bootimgParsingContext_t *ctxt)
+{
+  int rc = -1;
+
+  do
+    {
+      cJSON *jsonItem = (cJSON *)NULL;
+
+      /* First get the boot.img file pathname */
+      ProcessJsonObjectItem4String(bootImageFile);
+                      
+      /* read cmdLine */
+      ProcessJsonObjectItem4String(cmdLine);
+                      
+      /* read boardName */
+      ProcessJsonObjectItem4String(boardName);
+                      
+      /* read baseAddr */
+      ProcessJsonObjectItem4Number(baseAddr, size_t);
+                      
+      /* read pageSize */
+      ProcessJsonObjectItem4Number(pageSize, size_t);
+                      
+      /* read kernelOffset */
+      ProcessJsonObjectItem4Number(kernelOffset, off_t);
+                      
+      /* read ramdiskOffset */
+      ProcessJsonObjectItem4Number(ramdiskOffset, off_t);
+                      
+      /* read secondOffset */
+      do
+        {
+          ProcessJsonObjectItem4Number(secondOffset, off_t);
+        }
+      while (0);
+                      
+      /* read tagsOffset */
+      ProcessJsonObjectItem4Number(tagsOffset, off_t);
+                      
+      /* read boardOsVersion Object */
+      jsonItem = cJSON_GetObjectItem(jsonDoc,
+                                     BOOTIMG_XMLELT_BOARDOSVERSION_NAME);
+      if (jsonItem == (cJSON *)NULL)
+        {
+          fprintf(stderr,
+                  "%s: error: cannot access json item for boardOsVersion !\n",
+                  progname);
+          break;
+        }
+
+      cJSON *jsonChildItem = cJSON_GetObjectItem(jsonItem,
+                                                 BOOTIMG_XMLELT_VALUE_NAME);
+      if (jsonChildItem == (cJSON *)NULL)
+        {
+          fprintf(stderr,
+                  "%s: error: cannot access json item for boardOsVersion value !\n",
+                  progname);
+          break;
+        }
+
+      ctxt->osVersion = (uint32_t)jsonChildItem->valueint;
+
+      /* read boardOsPatchLvl Object */
+      jsonItem = cJSON_GetObjectItem(jsonDoc,
+                                     BOOTIMG_XMLELT_BOARDOSPATCHLVL_NAME);
+      if (jsonItem == (cJSON *)NULL)
+        {
+          fprintf(stderr,
+                  "%s: error: cannot access json item for boardOsPatchLvl !\n",
+                  progname);
+          break;
+        }
+
+      jsonChildItem = cJSON_GetObjectItem(jsonItem,
+                                          BOOTIMG_XMLELT_VALUE_NAME);
+      if (jsonChildItem == (cJSON *)NULL)
+        {
+          fprintf(stderr,
+                  "%s: error: cannot access json item for boardOsPatchLvl value !\n",
+                  progname);
+          break;
+        }
+
+      ctxt->osPatchLvl = (uint32_t)jsonChildItem->valueint;
+
+      /* read kernelImageFile */
+      ProcessJsonObjectItem4String(kernelImageFile);
+
+      /* read ramdiskImageFile */
+      ProcessJsonObjectItem4String(ramdiskImageFile);
+                      
+      /* read secondImageFile */
+      do
+        {
+          ProcessJsonObjectItem4String(secondImageFile);
+        }
+      while (0);
+                      
+      /* read dtbImageFile */
+      do
+        {
+          ProcessJsonObjectItem4String(dtbImageFile);
+        }
+      while (0);
+
+      rc = 0;
+    }
+  while (0);
+
+  return rc;
 }
 
 /*
@@ -1242,7 +1355,7 @@ void
 createBootImageFromJsonMetadata(const char *filename, const char *outdir)
 {
   FILE *jfp = NULL;
-  const char *pathname = getImageFilename(outdir, filename, BOOTIMG_JSON_FILENAME);
+  const char *pathname = filename;
 
   jfp = fopen(pathname, "rb");
   if (jfp == NULL)
@@ -1254,117 +1367,114 @@ createBootImageFromJsonMetadata(const char *filename, const char *outdir)
       char *buf = (char *)NULL;
 
       /* Get size of json file */
-      rewind(jfp);
-      json_sz = ftell(jfp);
-
-      /* Alloc mem for storing json data */
-      buf = (char *)malloc(json_sz * sizeof(char));
-      if (buf == (char *)NULL)
+      if (fseek(jfp, 0, SEEK_END) == -1)
         {
           /* Failed! cleanup */
           fprintf(stderr,
-                  "%s: error: cannot allocate %ld bytes for reading '%s'!\n",
-                  progname, json_sz, pathname);
+                  "%s: error: cannot seek at end of file '%s'!\n",
+                  progname, pathname);
           fclose(jfp);
         }
-      
       else
         {
-          /* Ok. Read data ... */
-          size_t rdsz = fread((void *)buf, json_sz, 1, jfp);
-          if (rdsz != 1)
+          json_sz = ftell(jfp);
+
+          /* Alloc mem for storing json data */
+          buf = (char *)malloc(json_sz * sizeof(char));
+          if (buf == (char *)NULL)
             {
               /* Failed! cleanup */
               fprintf(stderr,
-                      "%s: error: expected '%lu' bytes but read '%lu' bytes from '%s'!\n",
-                      progname, json_sz, json_sz * rdsz, pathname);
-              free((void *)buf);
-              fclose(jfp);            
+                      "%s: error: cannot allocate %ld bytes for reading '%s'!\n",
+                      progname, json_sz, pathname);
+              fclose(jfp);
             }
 
           else
             {
-              cJSON *jsonBootImageFile = (cJSON *)NULL;
-              const char *bootImageFile = (const char *)NULL;
-              FILE *imgfp = (FILE *)NULL;
-              boot_img_hdr header, *hdr;
-
-              /* Cleanup some resources we don't need anymore */
-              fclose(jfp);                        
-
-              /* init header struct */
-              hdr = initBootImgHeader(&header);
-              
-              /* Ok. Parse json data in a json doc for usage. */
-              cJSON *jsonDoc = cJSON_Parse(buf);
-
-              /* Release json data buffer memory */
-              free((void *)buf);
-
-              do
+              /* Ok. Read data ... */
+              rewind(jfp);
+              size_t rdsz = fread((void *)buf, json_sz, 1, jfp);
+              if (rdsz != 1)
                 {
-                  /* First get the boot.img file pathname */
-                  cJSON *jsonBootImageFile = cJSON_GetObjectItem(jsonDoc, "bootImageFile");
-                  const char *bootImageFile = strdup(jsonBootImageFile->valuestring);
-                  if (bootImageFile == (char *)NULL)
-                    {
-                      fprintf(stderr,
-                              "%s: error: cannot allocate memory for boot image file pathname!\n",
-                              progname);
-                      break;
-                    }
-                  cJSON_Delete(jsonBootImageFile);
-                  jsonBootImageFile = (cJSON *)NULL;
+                  /* Failed! cleanup */
+                  fprintf(stderr,
+                          "%s: error: expected '%lu' bytes but read '%lu' bytes from '%s'!\n",
+                          progname, json_sz, json_sz * rdsz, pathname);
+                  free((void *)buf);
+                  fclose(jfp);
+                }
+
+              else
+                {
+                  cJSON *jsonBootImageFile = (cJSON *)NULL;
+                  FILE *imgfp = (FILE *)NULL;
+                  bootimgParsingContext_t ctxt;
+                  boot_img_hdr *hdr = (boot_img_hdr *)NULL;
+
+                  /* zero parsing context */
+                  bzero((void *)&ctxt, sizeof(bootimgParsingContext_t));
+
+                  /* init some fields */
+                  ctxt.pageSize = BOOTIMG_DEFAULT_PAGESIZE;
+                  ctxt.baseAddr = BOOTIMG_DEFAULT_BASEADDR;
+ 
+                  /* init header struct */
+                  hdr = initBootImgHeader(&ctxt.hdr);
+
+                  /* Cleanup some resources we don't need anymore */
+                  fclose(jfp);
+
+                  /* Ok. Parse json data in a json doc for usage. */
+                  cJSON *jsonDoc = cJSON_Parse(buf);
+                  if (!jsonDoc)
+                    fprintf(stderr,
+                            "%s: error: couldn't parse json document '%s'\n",
+                            progname,
+                            pathname);
+
+                  else
+                    do
+                      {
+                        if (processJsonDoc(jsonDoc, &ctxt))
+                          {
+                            fprintf(stderr,
+                                    "%s: error: couldn't read data from json document '%s'\n",
+                                    progname,
+                                    pathname);
+                            cJSON_Delete(jsonDoc);
+                            break;
+                          }
+
+                        /* Delete json doc */
+                        cJSON_Delete(jsonDoc);
+                      
+                        /* then write image file from ctxt */
+                        if (writeImage(&ctxt) < 0)
+                          fprintf(stderr,
+                                  "%s: error: couldn't write image file at '%s'\n",
+                                  progname,
+                                  ctxt.bootImageFile);
+                        else if (vflag)
+                          fprintf(stdout,
+                                  "%s: image '%s' written!\n",
+                                  progname,
+                                  ctxt.bootImageFile);
+                      }
+                    while (0);
+
+                  /* Release json data buffer memory */
+                  free((void *)buf);
 
                   /*
-                   * TODO
-                   * get all fields from json doc and set them in json parsing context struct
+                   * cleanup
                    */
+                  releaseContextContent(&ctxt);
                   
-                  /* Open image file */
-                  imgfp = fopen(bootImageFile, "wb");
-                  if (imgfp == (FILE *)NULL)
-                    {
-                      /* Failed! cleanup */
-                      fprintf(stderr,
-                              "%s: error: cannot open boot image file '%s' for writing!\n",
-                              progname, bootImageFile);
-                      break;
-                    }
-
-                  size_t wrsz = fwrite(hdr, sizeof(boot_img_hdr), 1, imgfp);
-                  if (wrsz != 1)
-                    {
-                      fprintf(stderr,
-                              "%s: error: expected %lu bytes, wrote %lu: cannot write boot image to file '%s'!\n",
-                              progname, sizeof(boot_img_hdr), wrsz * sizeof(boot_img_hdr), bootImageFile);
-                      break;
-                    }
-
-                  if (fflush(imgfp))
-                    {
-                      fprintf(stderr,
-                              "%s: error: couldn't flush boot image file!\n",
-                              progname);
-                      break;
-                    }
+                  if (imgfp)
+                    fclose(imgfp);
+                  imgfp = (FILE *)NULL;
                 }
-              while (0);
-
-              /* 
-               * cleanup 
-               */
-              if (imgfp)
-                fclose(imgfp);
-              imgfp = (FILE *)NULL;
-
-              if (bootImageFile)
-                free((void *)bootImageFile);
-              bootImageFile = (char *)NULL;
-
-              if (jsonBootImageFile)
-                cJSON_Delete(jsonBootImageFile);
-              jsonBootImageFile = (cJSON *)NULL;
             }
         }
     }
