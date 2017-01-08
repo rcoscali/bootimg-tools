@@ -471,7 +471,7 @@ extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const ch
     }
   else
     fprintf(stderr,
-            "%s: error: cannot open device tree binary image file '%s' for writing !\n",
+            "%s: error: cannot open device tree blob image file '%s' for writing !\n",
             progname, filename);
   
   return(readsz * hdr->dt_size);
@@ -900,7 +900,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
           size_t dtb_sz = extractDeviceTreeImage(imgfp, hdr, outdir, basename);
           if (vflag && dtb_sz)
             {
-              fprintf(stdout, "%s: %lu bytes device tree binary image extracted!\n", progname, dtb_sz);
+              fprintf(stdout, "%s: %lu bytes device tree blob image extracted!\n", progname, dtb_sz);
             }
 
           tmpfname = getImageFilename(basename, outdir, BOOTIMG_DTB_FILENAME);

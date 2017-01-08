@@ -233,7 +233,7 @@ updateIdHeaderField(bootimgParsingContext_t *ctxt, data_context_t *dctxt)
   (void)SHA512_Update(&sha,
                       (const void *)&ctxt->hdr.second_size,
                       sizeof(ctxt->hdr.second_size));
-  /* then the device tree binary image */
+  /* then the device tree blob image */
   if (dctxt->dtb_data)
     (void)SHA512_Update(&sha,
                         dctxt->dtb_data,
@@ -381,7 +381,7 @@ writeImage(bootimgParsingContext_p ctxt)
             }
         }
 
-      /* load the device tree binary image if one is available */
+      /* load the device tree blob image if one is available */
       if (ctxt->dtbImageFile)
         {
           dctxt->dtb_data = loadImage(ctxt->dtbImageFile,
@@ -389,7 +389,7 @@ writeImage(bootimgParsingContext_p ctxt)
           if (!dctxt->dtb_data)
             {
               fprintf(stderr,
-                      "%s: error: couldn't load device tree binary image file at '%s'\n",
+                      "%s: error: couldn't load device tree blob image file at '%s'\n",
                       progname,
                       ctxt->dtbImageFile);
               break;
@@ -501,14 +501,14 @@ writeImage(bootimgParsingContext_p ctxt)
         }
 
       /*
-       * Device tree binary image
+       * device tree blob image
        */
       if (dctxt->dtb_data)
         {
           if ((wrsz = write(fd, dctxt->dtb_data, ctxt->hdr.dt_size)) != ctxt->hdr.dt_size)
             {
               fprintf(stderr,
-                      "%s: error: expected %lu device tree binary image bytes written but got only %lu!\n",
+                      "%s: error: expected %lu device tree blob image bytes written but got only %lu!\n",
                       progname,
                       sizeof (ctxt->hdr.dt_size),
                       wrsz);
@@ -518,7 +518,7 @@ writeImage(bootimgParsingContext_p ctxt)
           if (writePaddingToFd(fd, ctxt->hdr.dt_size, ctxt->hdr.dt_size) == -1)
             {
               fprintf(stderr,
-                      "%s: error: failed to pad device tree binary image!\n",
+                      "%s: error: failed to pad device tree blob image!\n",
                       progname);
               break;
             }
