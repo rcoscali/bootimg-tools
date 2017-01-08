@@ -112,11 +112,6 @@ extern char *optarg;
 extern int optind;
 
 /*
- * errno
- */
-extern error_t errno;
-
-/*
  * Forward decl
  */
 static void *loadImage(const char *, size_t *);

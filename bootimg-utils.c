@@ -61,7 +61,7 @@ getImageFilename(const char *basename, const char *outdir, int kind)
     default:
       /* else change extension .<ext> in _<ext> for all other images */
       if (strrchr(basename, '.'))
-	*(strrchr(basename, '.')) = '_';
+        *(strrchr(basename, '.')) = '_';
     }
   if (basename[0] == '/')
     basenameIsAbsolute = 1;
@@ -70,53 +70,53 @@ getImageFilename(const char *basename, const char *outdir, int kind)
     {
     case BOOTIMG_BOOTIMG_FILENAME:
       sprintf(pathname,
-	      basenameIsAbsolute ? "%s.img" : "%s/%s.img",
-	      basenameIsAbsolute ? basename : outdir,
-	      basename);
+              basenameIsAbsolute ? "%s.img" : "%s/%s.img",
+              basenameIsAbsolute ? basename : outdir,
+              basename);
       if (vflag > 2)
-	fprintf(stdout, "%s: Boot Image filename = '%s'\n", progname, pathname);
+        fprintf(stdout, "%s: Boot Image filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_XML_FILENAME:
       sprintf(pathname, "%s.xml", basename);
       if (vflag > 2)
-	fprintf(stdout, "%s: XML Metadata filename = '%s'\n", progname, pathname);
+        fprintf(stdout, "%s: XML Metadata filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_JSON_FILENAME:
       sprintf(pathname, "%s.json", basename);
       if (vflag > 2)
-	fprintf(stdout, "%s: JSON Metadata filename = '%s'\n", progname, pathname);
+        fprintf(stdout, "%s: JSON Metadata filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_KERNEL_FILENAME:
       sprintf(pathname,
-	      basenameIsAbsolute ? "%s.img" : "%s/%s.zImage",
-	      basenameIsAbsolute ? basename : outdir,
-	      basename);
+              basenameIsAbsolute ? "%s.img" : "%s/%s.zImage",
+              basenameIsAbsolute ? basename : outdir,
+              basename);
       if (vflag > 2)
-	fprintf(stdout, "%s: KERNEL filename = '%s'\n", progname, pathname);
+        fprintf(stdout, "%s: KERNEL filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_RAMDISK_FILENAME:
       sprintf(pathname,
-	      basenameIsAbsolute ? "%s.cpio.gz" : "%s/%s.cpio.gz",
-	      basenameIsAbsolute ? basename : outdir,
-	      basename);
+              basenameIsAbsolute ? "%s.cpio.gz" : "%s/%s.cpio.gz",
+              basenameIsAbsolute ? basename : outdir,
+              basename);
       if (vflag > 2)
-	fprintf(stdout, "%s: RAMDISK filename = '%s'\n", progname, pathname);
+        fprintf(stdout, "%s: RAMDISK filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_SECOND_LOADER_FILENAME:
       sprintf(pathname,
-	      basenameIsAbsolute ? "%s-2ndldr.img" : "%s/%s-2ndldr.img",
-	      basenameIsAbsolute ? basename : outdir,
-	      basename);
+              basenameIsAbsolute ? "%s-2ndldr.img" : "%s/%s-2ndldr.img",
+              basenameIsAbsolute ? basename : outdir,
+              basename);
       if (vflag > 2)
-	fprintf(stdout, "%s: 2nd BOOTLOADER filename = '%s'\n", progname, pathname);
+        fprintf(stdout, "%s: 2nd BOOTLOADER filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_DTB_FILENAME:
       sprintf(pathname,
-	      basenameIsAbsolute ? "%s.dtb" : "%s/%s.dtb",
-	      basenameIsAbsolute ? basename : outdir,
-	      basename);
+              basenameIsAbsolute ? "%s.dtb" : "%s/%s.dtb",
+              basenameIsAbsolute ? basename : outdir,
+              basename);
       if (vflag > 2)
-	fprintf(stdout, "%s: DTB filename = '%s'\n", progname, pathname);
+        fprintf(stdout, "%s: DTB filename = '%s'\n", progname, pathname);
       break;
     default:
       sprintf(pathname, "%s-unknown.dat", basename);
