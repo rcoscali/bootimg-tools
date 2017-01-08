@@ -69,6 +69,11 @@ int xflag = 0;
 int jflag = 0;
 int nflag = 0;
 int pflag = 0;
+int rrflag = 0;
+int brrflag = 0;
+int errflag = 0;
+int frrflag = 0;
+int prrflag = 0;
 
 /* nval: basename */
 char *nval = (char *)NULL;
@@ -76,6 +81,12 @@ char *nval = (char *)NULL;
 char *oval = (char *)NULL;
 /* pval: pagesize */
 size_t pval = 0L;
+
+/* rewrite rules */
+char *basename_rr = (char *)NULL;
+char *extension_rr = (char *)NULL;
+char *filename_rr = (char *)NULL;
+char *pathname_rr = (char *)NULL;
 
 /*
  * progname & blankname are program name and space string with progname size
@@ -121,10 +132,16 @@ struct option long_options[] = {
   {"json",     no_argument,       0,  'j' },
   {"pagesize", required_argument, 0,  'p' },
   {"help",     no_argument,       0,  'h' },
+  {"image-basename-rewrite-cmd", required_argument, &rrflag, 0 },
+  {"image-ext-rewrite-cmd",      required_argument, &rrflag, 1 },
+  {"image-filename-rewrite-cmd", required_argument, &rrflag, 2 },
+  {"image-pathname-rewrite-cmd", required_argument, &rrflag, 3 },
   {0,          0,                 0,   0  }
 };
 #define BOOTIMG_OPTSTRING "v::o:n:xjh:"
 const char *unknown_option = "????";
+
+#define MAX_COMMAND_LENGTH 1024
 
 /*
  * Getopt external defs
@@ -205,6 +222,40 @@ main(int argc, char **argv)
 
       switch (c)
         {
+        case 0:
+          switch (rrflag)
+            {
+          	  case 0:
+          		basename_rr = optarg;
+                brrflag = 0;
+                if (vflag > 3)
+        	      fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), basename_rr);
+                break;
+
+          	  case 1:
+                extension_rr = optarg;
+                errflag = 0;
+                if (vflag > 3)
+            	  fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), extension_rr);
+                break;
+
+          	  case 2:
+                filename_rr = optarg;
+                frrflag = 0;
+                if (vflag > 3)
+            	  fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), filename_rr);
+                break;
+
+          	  case 3:
+                pathname_rr = optarg;
+                prrflag = 0;
+                if (vflag > 3)
+            	  fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), pathname_rr);
+                break;
+            }
+          rrflag = 0;
+          break;
+
         case 'v':
           if (optarg)
             vflag += strtol(optarg, NULL, 10);
@@ -225,13 +276,17 @@ main(int argc, char **argv)
                 char newval[PATH_MAX];
                 if (oval[0] == '.' && oval[1] == '/')
                   oval = &oval[2];
-                sprintf(newval, "%s/%s", oldval, oval);
+                sprintf(newval,
+                		"%s%s%s",
+                		oldval,
+						(oldval[strlen(oldval)-1]=='/'?"":"/"),
+						oval);
                 oval = strdup(newval);
               }
             free((void *)oldval);
             if (vflag)
-              fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-                      progname, getLongOptionName(long_options, c), c, oflag);
+              fprintf(stderr, "%s: option %s/%c (=%d) set to '%s'\n",
+                      progname, getLongOptionName(long_options, c), c, oflag, oval);
           }
           break;
           
@@ -276,6 +331,12 @@ main(int argc, char **argv)
           fprintf(stderr, "%s: getopt returned character code 0%o ??\n", progname, c);
         }
     }
+
+  brrflag = (basename_rr != NULL);
+  errflag = (extension_rr != NULL);
+  frrflag = (filename_rr != NULL);
+  prrflag = (pathname_rr != NULL);
+  rrflag = brrflag || errflag || frrflag || prrflag;
 
   struct stat statbuf;
   if (stat(oval, &statbuf) == -1 && errno == ENOENT)
@@ -477,6 +538,182 @@ extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const ch
   return(readsz * hdr->dt_size);
 }
 
+char *
+rewrite(const char *basedir, const char *string)
+{
+  char *basename;
+  char rewrote_basename[PATH_MAX];
+  char basename_rewrite_command[MAX_COMMAND_LENGTH];
+  FILE *basename_fp;
+  char *extension;
+  char rewrote_extension[PATH_MAX];
+  char extension_rewrite_command[MAX_COMMAND_LENGTH];
+  FILE *extension_fp;
+  char *filename;
+  char rewrote_filename[PATH_MAX];
+  char filename_rewrite_command[MAX_COMMAND_LENGTH];
+  FILE *filename_fp;
+  char *pathname;
+  char rewrote_pathname[PATH_MAX];
+  char pathname_rewrite_command[MAX_COMMAND_LENGTH];
+  FILE *pathname_fp;
+
+  char have_extension = 0;
+  char is_absolute = 0;
+
+  char *string2 = NULL;
+  char *dir = NULL;
+
+  /* if provided string have an extension */
+  if (rindex(string, '.') != (char *)NULL)
+    have_extension = 1;
+  if (string[0] == '/')
+    {
+      is_absolute = 1;
+      dir = rindex(string, '/') +1;
+    }
+
+  if (!have_extension || !is_absolute)
+    {
+      string2 = (char *)getImageFilename(string, basedir, BOOTIMG_BOOTIMG_FILENAME);
+      dir = strdup (string2);
+      *(rindex(dir, '/') +1) = '\0';
+    }
+  else
+    string2 = (char *)string;
+    
+  basename = strdup(string2);
+  if (rindex(basename, '.'))
+    *(rindex(basename, '.')) = '\0';
+  if (rindex(basename, '/'))
+    basename = rindex(basename, '/') +1;
+
+  extension = strdup(string2);
+  if (rindex(extension, '.'))
+    extension = rindex(extension, '.') +1;
+
+  filename = strdup(string2);
+  if (rindex(filename, '/'))
+    filename = rindex(filename, '/') +1;
+
+  pathname = string2;
+
+  if (brrflag)
+    {
+      sprintf(basename_rewrite_command, "echo -n '%s' | sed -e '%s'", basename, basename_rr);
+      if ((basename_fp = popen(basename_rewrite_command, "r")) != NULL)
+        {
+          if (fgets(rewrote_basename, sizeof(rewrote_basename), basename_fp) == NULL)
+            {
+              fprintf(stderr,
+                      "%s: error: cannot read from pipe for rewrite basename!\n",
+                      progname);
+            }
+          else
+            {
+              if (vflag)
+                fprintf(stdout,
+                        "%s: basename '%s' rewrote in '%s'\n",
+                        progname, basename, rewrote_basename);
+              basename = strdup(rewrote_basename);
+              sprintf(rewrote_pathname, "%s%s.%s", dir, rewrote_basename, extension);
+            }
+          pclose(basename_fp);
+        }
+    }
+  else
+    sprintf(rewrote_pathname, "%s%s.%s", dir, basename, extension);
+
+  if (errflag)
+    {
+      sprintf(extension_rewrite_command, "echo -n '%s' | sed -e '%s'", extension, extension_rr);
+      if ((extension_fp = popen(extension_rewrite_command, "r")) != NULL)
+        {
+          if (fgets(rewrote_extension, sizeof(rewrote_extension), extension_fp) == NULL)
+            {
+              fprintf(stderr,
+                      "%s: error: cannot read from pipe for rewrite extension!\n",
+                      progname);
+            }
+          else
+            {
+              if (vflag)
+                fprintf(stdout,
+                        "%s: extension '%s' rewrote in '%s'\n",
+                        progname, extension, rewrote_extension);
+              extension = strdup(rewrote_extension);
+              sprintf(rewrote_filename, "%s%s.%s", dir, basename, rewrote_extension);
+            }
+          pclose(extension_fp);
+        }
+    }
+  else
+    sprintf(rewrote_pathname, "%s%s.%s", dir, basename, extension);
+
+  if (frrflag)
+    {
+      free((void *)filename);
+      if (!(filename = malloc(strlen(basename) + strlen(extension) +2)))
+        perror("allocate memory for filename processing\n");
+          
+      else
+        {
+          sprintf(filename, "%s.%s", basename, extension);
+          sprintf(filename_rewrite_command, "echo -n '%s' | sed -e '%s'", filename, filename_rr);
+          if ((filename_fp = popen(filename_rewrite_command, "r")) != NULL)
+            {
+              if (fgets(rewrote_filename, sizeof(rewrote_filename), filename_fp) == NULL)
+                {
+                  fprintf(stderr,
+                          "%s: error: cannot read from pipe for rewrite filename!\n",
+                          progname);
+                }
+              else
+                {
+                  if (vflag)
+                    fprintf(stdout,
+                            "%s: filename '%s' rewrote in '%s'\n",
+                            progname, filename, rewrote_filename);
+                  filename = strdup(rewrote_filename);
+                  sprintf(rewrote_pathname, "%s%s", dir, rewrote_filename);
+                }
+              pclose(filename_fp);
+            }
+          else
+            sprintf(rewrote_pathname, "%s%s", dir, filename);
+        }
+    }
+
+  if (prrflag)
+    {
+      free((void *)pathname);
+      if (!(pathname = malloc(strlen(basename) + strlen(filename) +2)))
+        perror("allocate memory for pathname processing\n");
+      else
+        {
+          sprintf(pathname, "%s%s", dir, filename);
+          sprintf(pathname_rewrite_command, "echo -n '%s' | sed -e '%s'", pathname, pathname_rr);
+          if ((pathname_fp = popen(pathname_rewrite_command, "r")) != NULL)
+            {
+              if (fgets(rewrote_pathname, sizeof(rewrote_pathname), pathname_fp) == NULL)
+                {
+                  fprintf(stderr,
+                          "%s: error: cannot read from pipe for rewrite pathname!\n",
+                          progname);
+                }
+              else
+                if (vflag)
+                  fprintf(stdout,
+                          "%s: pathname '%s' rewrote in '%s'\n",
+                          progname, pathname, rewrote_pathname);
+              pclose(pathname_fp);
+            }
+        }
+    }
+
+  return strdup(rewrote_pathname);
+}
+
 /*
  * Process an image file and extract metadata & images 
  */
@@ -488,6 +725,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
   FILE *imgfp = (FILE *)NULL, *xfp = (FILE *)NULL, *jfp = (FILE *)NULL;
   off_t offset = 0;
   size_t total_read = 0;
+  const char *imgfilename;
   const char *basename = (const char *)(nval ? nval : imgfile);
   const char *xml_filename = (const char *)NULL, *json_filename = (const char *)NULL;
   xmlTextWriterPtr xmlWriter;
@@ -497,7 +735,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
   
   if (vflag)
     fprintf(stderr, "Image filename option: '%s'\n", imgfile);
-  
+
   if ((imgfp = fopen(imgfile, "rb")) == (FILE *)NULL)
     {
       fprintf(stderr, "%s: error: cannot open image file at '%s'\n", progname, imgfile);
@@ -549,6 +787,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 break;
               }
             const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_BOOTIMG_FILENAME);
+            //if (rrflag)
+              //tmpfname = rewrite(outdir, tmpfname);
             xmlTextWriterWriteAttribute(xmlWriter, "bootImageFile", tmpfname);
             free((void *)tmpfname);
           }
@@ -574,6 +814,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 break;          
               }
             const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_BOOTIMG_FILENAME);
+            //if (rrflag)
+              //tmpfname = rewrite(outdir, tmpfname);
             cJSON_AddItemToObject(jsonDoc, "bootImageFile", cJSON_CreateString(tmpfname));
             free((void *)tmpfname);         
           }
@@ -853,6 +1095,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
       total_read += readPadding(imgfp, hdr->kernel_size, pval);
 
       const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
+      //if (rrflag)
+        //tmpfname = rewrite(outdir, tmpfname);
       if (xflag)
         xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, "%s", tmpfname);
       if (jflag)
@@ -866,6 +1110,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
         }
 
       tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
+      //if (rrflag)
+        //tmpfname = rewrite(outdir, tmpfname);
       if (xflag)
         xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_RAMDISKIMAGEFILE_NAME, "%s", tmpfname);
       if (jflag)
@@ -883,7 +1129,9 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
               fprintf(stdout, "%s: %lu bytes second bootloader image extracted!\n", progname, second_sz);
             }
 
-          tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
+          tmpfname = getImageFilename(basename, outdir, BOOTIMG_SECOND_LOADER_FILENAME);
+          //if (rrflag)
+            //tmpfname = rewrite(outdir, tmpfname);
           if (xflag)
             xmlTextWriterWriteFormatElement(xmlWriter, "secondBootloaderImageFile", "%s", tmpfname);
           if (jflag)
@@ -904,6 +1152,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
             }
 
           tmpfname = getImageFilename(basename, outdir, BOOTIMG_DTB_FILENAME);
+          //if (rrflag)
+            //tmpfname = rewrite(outdir, tmpfname);
           if (xflag)
             xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, "%s", tmpfname);
           if (jflag)
