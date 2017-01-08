@@ -15,6 +15,10 @@
  * See the License for the specific language governing permissions and 
  * limitations under the License.
  */
+/*
+ * TODO
+ * Some tests still to be done for second and dtb images. Still to test with JSON.
+ */
 
 #include <stdio.h>
 #include <stdlib.h>

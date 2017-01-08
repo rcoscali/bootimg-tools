@@ -48,6 +48,7 @@
 
 /* XML element local names */
 #define BOOTIMG_XMLELT_BOOTIMAGE_NAME        "bootImage"
+#define BOOTIMG_XMLELT_BOOTIMAGEFILE_NAME    "bootImageFile"
 #define BOOTIMG_XMLELT_CMDLINE_NAME          "cmdLine"
 #define BOOTIMG_XMLELT_BOARDNAME_NAME        "boardName"
 #define BOOTIMG_XMLELT_BASEADDR_NAME         "baseAddr"
@@ -182,10 +183,39 @@
             (unsigned long int)ctxt->x);                                \
   free((void *)x##Str)
 
-typedef struct _bootimgXmlParsingContext_st bootimgXmlParsingContext_t;
-typedef struct _bootimgXmlParsingContext_st *bootimgXmlParsingContext_p;
+#define ProcessJsonObjectItem4String(x)                                 \
+  jsonItem = cJSON_GetObjectItem(jsonDoc, #x);                          \
+  if (jsonItem == (cJSON *)NULL)                                        \
+    {                                                                   \
+      fprintf(stderr,                                                   \
+              "%s: error: cannot access json item for "#x" !\n",        \
+              progname);                                                \
+      break;                                                            \
+    }                                                                   \
+  ctxt->x = (xmlChar *)strdup(jsonItem->valuestring);                   \
+  if (ctxt->x == (xmlChar *)NULL)                                       \
+    {                                                                   \
+      fprintf(stderr,                                                   \
+              "%s: error: cannot allocate memory for "#x" !\n",         \
+              progname);                                                \
+      break;                                                            \
+    }
+    
+#define ProcessJsonObjectItem4Number(x, t)                              \
+  jsonItem = cJSON_GetObjectItem(jsonDoc, #x);                          \
+  if (jsonItem == (cJSON *)NULL)                                        \
+    {                                                                   \
+      fprintf(stderr,                                                   \
+              "%s: error: cannot access json item for "#x" !\n",        \
+              progname);                                                \
+      break;                                                            \
+    }                                                                   \
+  ctxt->x = (t)strtol(jsonItem->valuestring, NULL, 0);
+    
+typedef struct _bootimgParsingContext_st bootimgParsingContext_t;
+typedef struct _bootimgParsingContext_st *bootimgParsingContext_p;
 
-struct _bootimgXmlParsingContext_st
+struct _bootimgParsingContext_st
 {
   /* Boot image Header */
   boot_img_hdr hdr;

@@ -18,9 +18,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <alloca.h>
+#include <errno.h>
 
 #include <libxml/encoding.h>
 #include <libxml/xmlwriter.h>
@@ -273,10 +277,15 @@ main(int argc, char **argv)
         }
     }
 
-  if (vflag > 3)
+  struct stat statbuf;
+  if (stat(oval, &statbuf) == -1 && errno == ENOENT)
     {
-      fprintf(stderr, "%s: optind = %d\n", progname, optind);
-      fprintf(stderr, "%s: argc = %d\n", progname, argc);
+      if (mkdir(oval, 0755) == -1)
+	{
+	  perror(progname);
+	  fprintf(stderr, "%s: error: Cannot create output directory !\n", progname);
+	  exit(1);
+	}
     }
 
   if (optind < argc)
@@ -285,8 +294,8 @@ main(int argc, char **argv)
         /* 
          *
          */
-        if (extractBootImageMetadata(argv[optind++], oval))
-          fprintf(stdout, "%s: image data successfully extracted from '%s'\n", progname, argv[optind-1]);
+        if (extractBootImageMetadata(argv[optind++], oval) && vflag)
+	  fprintf(stdout, "%s: image data successfully extracted from '%s'\n", progname, argv[optind-1]);
         else if (vflag)
           fprintf(stderr, "%s: error: image data extraction failure for '%s'\n", progname, argv[optind-1]);
 
@@ -344,7 +353,7 @@ extractKernelImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char *
 {
   size_t readsz = 0;
   const char *filename = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
-  FILE *k = fopen(filename, "wb");
+  FILE *k = fopen(filename, "w");
   
   if (k)
     {
@@ -590,7 +599,6 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
           int year, month;
           char boardOsVersionStr[100], boardOsPatchLvlStr[100];
           
-          fprintf(stdout, "%s: HDR.os_version = 0x%08x\n", progname, hdr->os_version);
           os_version = hdr->os_version >> 11;
           os_patch_level = hdr->os_version&0x7ff;
           

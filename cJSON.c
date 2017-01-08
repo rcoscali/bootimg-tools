@@ -1670,12 +1670,23 @@ cJSON *cJSON_GetArrayItem(const cJSON *array, int item)
 
 cJSON *cJSON_GetObjectItem(const cJSON *object, const char *string)
 {
-  cJSON *c = object ? object->child : NULL;
+  static cJSON *last;
+  cJSON *c = (object ? (cJSON *)object->child : (cJSON *)NULL);
+  if (last) c = last;
   while (c && cJSON_strcasecmp(c->string, string))
     {
       c = c->next;
     }
-  return c;
+  if (!c)
+  {
+	c = object ? object->child : NULL;
+	  while (c && cJSON_strcasecmp(c->string, string))
+	    {
+	      c = c->next;
+	    }
+  }
+  last = c;
+  return (cJSON *)c;
 }
 
 cjbool cJSON_HasObjectItem(const cJSON *object,const char *string)
