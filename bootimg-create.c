@@ -41,7 +41,7 @@
 #include "bootimg-priv.h"
 #include "bootimg-utils.h"
 
-#define BOOTIMG_SHA_CTX	SHA1_CTX
+#define BOOTIMG_SHA_CTX	SHA_CTX
 #define BOOTIMG_SHA_Init SHA1_Init
 #define BOOTIMG_SHA_Update SHA1_Update
 #define BOOTIMG_SHA_Final SHA1_Final
