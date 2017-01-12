@@ -1,3 +1,7 @@
+DESTDIR := 
+PREFIX := /usr/local
+BINDIR := $(PREFIX)/bin
+
 PROGRAMS := bootimg-extract bootimg-create
 BOOTIMG_EXTRACT_SRCS := bootimg-extract.c bootimg-utils.c cJSON.c
 BOOTIMG_EXTRACT_OBJS := $(BOOTIMG_EXTRACT_SRCS:%.c=%.o)
@@ -16,6 +20,7 @@ CFLAGS += -O2
 else
 CFLAGS += -g -O0
 endif
+INSTALL := install
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -c $< -o $@
@@ -28,6 +33,9 @@ all: $(PROGRAMS)
 
 clean:
 	$(RM) *.o $(PROGRAMS) *~
+
+install:
+	$(INSTALL) -o root -g root -m 0755 $(PROGRAMS) $(DESTDIR)$(BINDIR)
 
 
 bootimg-extract: $(BOOTIMG_EXTRACT_OBJS)

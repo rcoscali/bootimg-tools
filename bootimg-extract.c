@@ -68,6 +68,7 @@ int oflag = 0;
 int xflag = 0;
 int jflag = 0;
 int nflag = 0;
+int iflag = 0;
 int pflag = 0;
 int rrflag = 0;
 int brrflag = 0;
@@ -117,6 +118,7 @@ static const char *progusage =
   "       %s --json|-j           : generate a json metadata file.                                           \n"
   "       %s                       This option is exclusive with xml.                                       \n"
   "       %s                       Only the last one will be taken into account.                            \n"
+  "       %s --identify|-i       : Dump the image id.                                                       \n"
   "       %s --pagesize|-p <pgsz>: Image page size. If not providedn, use the one specified in the file     \n"
   "       %s --name|-n <basename>: provide a basename template for the metadata file.                       \n"
   "       %s --help|-h           : display this message.                                                    \n";
@@ -125,20 +127,21 @@ static const char *progusage =
  * Long options
  */
 struct option long_options[] = {
-  {"verbose",  optional_argument, 0,  'v' },
-  {"outdir",   required_argument, 0,  'o' },
-  {"name",     required_argument, 0,  'n' },
-  {"xml",      no_argument,       0,  'x' },
-  {"json",     no_argument,       0,  'j' },
-  {"pagesize", required_argument, 0,  'p' },
-  {"help",     no_argument,       0,  'h' },
+  {"verbose",                    optional_argument, 0,      'v' },
+  {"outdir",                     required_argument, 0,      'o' },
+  {"name",                       required_argument, 0,      'n' },
+  {"xml",                        no_argument,       0,      'x' },
+  {"json",                       no_argument,       0,      'j' },
+  {"identify",                   no_argument,       0,      'i' },
+  {"pagesize",                   required_argument, 0,      'p' },
+  {"help",                       no_argument,       0,      'h' },
   {"image-basename-rewrite-cmd", required_argument, &rrflag, 0 },
   {"image-ext-rewrite-cmd",      required_argument, &rrflag, 1 },
   {"image-filename-rewrite-cmd", required_argument, &rrflag, 2 },
   {"image-pathname-rewrite-cmd", required_argument, &rrflag, 3 },
-  {0,          0,                 0,   0  }
+  {0,                            0,                 0,       0  }
 };
-#define BOOTIMG_OPTSTRING "v::o:n:xjh:"
+#define BOOTIMG_OPTSTRING "v::o:n:xjip:h"
 const char *unknown_option = "????";
 
 #define MAX_COMMAND_LENGTH 1024
@@ -312,6 +315,13 @@ main(int argc, char **argv)
                     progname, getLongOptionName(long_options, c), c, nflag, nval);
           break;
 
+        case 'i':
+          iflag = 1;
+          if (vflag > 3)
+            fprintf(stderr, "%s: option %s/%c (=%d) set\n",
+                    progname, getLongOptionName(long_options, c), c, iflag);
+	  break;
+	  
         case 'p':
           pflag = 1;
           pval = strtol(optarg, NULL, 10);
@@ -747,7 +757,28 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
       total_read = offset;
       
       if (vflag)
-        fprintf(stdout, "%s: Magic found at offset %ld in file '%s'\n", progname, offset, imgfile);
+	fprintf(stdout,
+		"%s: Magic found at offset %ld in file '%s'\n",
+		progname, offset, imgfile);
+      
+      if (iflag)
+	{
+	  fprintf(stdout,
+		  "%s: Boot Image Identification:\n"
+		  "%s  \t%02x%02x%02x%02x%02x%02x%02x%02x"
+		  "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x"
+		  "%02x%02x%02x%02x%02x%02x%02x%02x\t %s\n",
+		  progname, blankname, 
+		  (hdr->id[0]>>24)&0xFF, (hdr->id[0]>>16)&0xFF, (hdr->id[0]>>8)&0xFF, hdr->id[0]&0xFF,
+		  (hdr->id[1]>>24)&0xFF, (hdr->id[1]>>16)&0xFF, (hdr->id[1]>>8)&0xFF, hdr->id[1]&0xFF,
+		  (hdr->id[2]>>24)&0xFF, (hdr->id[2]>>16)&0xFF, (hdr->id[2]>>8)&0xFF, hdr->id[2]&0xFF,
+		  (hdr->id[3]>>24)&0xFF, (hdr->id[3]>>16)&0xFF, (hdr->id[3]>>8)&0xFF, hdr->id[3]&0xFF,
+		  (hdr->id[4]>>24)&0xFF, (hdr->id[4]>>16)&0xFF, (hdr->id[4]>>8)&0xFF, hdr->id[4]&0xFF,
+		  (hdr->id[5]>>24)&0xFF, (hdr->id[5]>>16)&0xFF, (hdr->id[5]>>8)&0xFF, hdr->id[5]&0xFF,
+		  (hdr->id[6]>>24)&0xFF, (hdr->id[6]>>16)&0xFF, (hdr->id[6]>>8)&0xFF, hdr->id[6]&0xFF,
+		  (hdr->id[7]>>24)&0xFF, (hdr->id[7]>>16)&0xFF, (hdr->id[7]>>8)&0xFF, hdr->id[7]&0xFF,
+		  imgfile);
+	}
       
       base_addr = hdr->kernel_addr - kernel_offset;
 

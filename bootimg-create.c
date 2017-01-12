@@ -41,6 +41,11 @@
 #include "bootimg-priv.h"
 #include "bootimg-utils.h"
 
+#define BOOTIMG_SHA_CTX	SHA1_CTX
+#define BOOTIMG_SHA_Init SHA1_Init
+#define BOOTIMG_SHA_Update SHA1_Update
+#define BOOTIMG_SHA_Final SHA1_Final
+
 /*
  * Options flags & values
  * - v: verbose. vflag € N+*
@@ -205,45 +210,45 @@ void
 updateIdHeaderField(bootimgParsingContext_t *ctxt, data_context_t *dctxt)
 {
   /* init sha512 context */
-  SHA512_CTX sha;
-  (void)SHA512_Init(&sha);
+  BOOTIMG_SHA_CTX sha;
+  (void)BOOTIMG_SHA_Init(&sha);
 
   /* start computation with kernel image */
-  (void)SHA512_Update(&sha,
+  (void)BOOTIMG_SHA_Update(&sha,
                       dctxt->kernel_data,
                       ctxt->hdr.kernel_size);
   /* update with the kernel_size field */
-  (void)SHA512_Update(&sha,
+  (void)BOOTIMG_SHA_Update(&sha,
                       (const void *)&ctxt->hdr.kernel_size,
                       sizeof(ctxt->hdr.kernel_size));
   /* add the ramdisk image */
-  (void)SHA512_Update(&sha,
+  (void)BOOTIMG_SHA_Update(&sha,
                       dctxt->ramdisk_data,
                       ctxt->hdr.ramdisk_size);
   /* and its size field */
-  (void)SHA512_Update(&sha,
+  (void)BOOTIMG_SHA_Update(&sha,
                       (const void *)&ctxt->hdr.ramdisk_size,
                       sizeof(ctxt->hdr.ramdisk_size));
   /* second loader image is available */
   if (dctxt->second_data)
-    (void)SHA512_Update(&sha,
+    (void)BOOTIMG_SHA_Update(&sha,
                         dctxt->second_data,
                         ctxt->hdr.second_size);
   /* and its size field */
-  (void)SHA512_Update(&sha,
+  (void)BOOTIMG_SHA_Update(&sha,
                       (const void *)&ctxt->hdr.second_size,
                       sizeof(ctxt->hdr.second_size));
   /* then the device tree blob image */
   if (dctxt->dtb_data)
-    (void)SHA512_Update(&sha,
+    (void)BOOTIMG_SHA_Update(&sha,
                         dctxt->dtb_data,
                         ctxt->hdr.dt_size);
   /* and its size field */
-  (void)SHA512_Update(&sha,
+  (void)BOOTIMG_SHA_Update(&sha,
                       (const void *)&ctxt->hdr.dt_size,
                       sizeof(ctxt->hdr.dt_size));
   /* get the digest in the id field of the header */
-  (void)SHA512_Final((unsigned char *)&ctxt->hdr.id, &sha);
+  (void)BOOTIMG_SHA_Final((unsigned char *)&ctxt->hdr.id, &sha);
 }
 
 /*
@@ -526,17 +531,27 @@ writeImage(bootimgParsingContext_p ctxt)
 
       if (iflag)
         {
-          fprintf(stdout, "%s: Boot Image Identification:\n", progname);
-          fprintf(stdout, "%s: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x \t%s\n",
-                  blankname,
-                  (ctxt->hdr.id[0]>>24)&0xFF, (ctxt->hdr.id[0]>>16)&0xFF, (ctxt->hdr.id[0]>>8)&0xFF, ctxt->hdr.id[0]&0xFF,
-                  (ctxt->hdr.id[1]>>24)&0xFF, (ctxt->hdr.id[1]>>16)&0xFF, (ctxt->hdr.id[1]>>8)&0xFF, ctxt->hdr.id[1]&0xFF,
-                  (ctxt->hdr.id[2]>>24)&0xFF, (ctxt->hdr.id[2]>>16)&0xFF, (ctxt->hdr.id[2]>>8)&0xFF, ctxt->hdr.id[2]&0xFF,
-                  (ctxt->hdr.id[3]>>24)&0xFF, (ctxt->hdr.id[3]>>16)&0xFF, (ctxt->hdr.id[3]>>8)&0xFF, ctxt->hdr.id[3]&0xFF,
-                  (ctxt->hdr.id[4]>>24)&0xFF, (ctxt->hdr.id[4]>>16)&0xFF, (ctxt->hdr.id[4]>>8)&0xFF, ctxt->hdr.id[4]&0xFF,
-                  (ctxt->hdr.id[5]>>24)&0xFF, (ctxt->hdr.id[5]>>16)&0xFF, (ctxt->hdr.id[5]>>8)&0xFF, ctxt->hdr.id[5]&0xFF,
-                  (ctxt->hdr.id[6]>>24)&0xFF, (ctxt->hdr.id[6]>>16)&0xFF, (ctxt->hdr.id[6]>>8)&0xFF, ctxt->hdr.id[6]&0xFF,
-                  (ctxt->hdr.id[7]>>24)&0xFF, (ctxt->hdr.id[7]>>16)&0xFF, (ctxt->hdr.id[7]>>8)&0xFF, ctxt->hdr.id[7]&0xFF,
+          fprintf(stdout,
+		  "%s: Boot Image Identification:\n%s  %02x%02x%02x%02x%02x%02x%02x%02x"
+		  "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x"
+		  "%02x%02x%02x%02x%02x%02x%02x%02x\t %s\n",
+		  progname, blankname,
+                  (ctxt->hdr.id[0]>>24)&0xFF, (ctxt->hdr.id[0]>>16)&0xFF,
+		  (ctxt->hdr.id[0]>>8)&0xFF, ctxt->hdr.id[0]&0xFF,
+                  (ctxt->hdr.id[1]>>24)&0xFF, (ctxt->hdr.id[1]>>16)&0xFF,
+		  (ctxt->hdr.id[1]>>8)&0xFF, ctxt->hdr.id[1]&0xFF,
+                  (ctxt->hdr.id[2]>>24)&0xFF, (ctxt->hdr.id[2]>>16)&0xFF,
+		  (ctxt->hdr.id[2]>>8)&0xFF, ctxt->hdr.id[2]&0xFF,
+                  (ctxt->hdr.id[3]>>24)&0xFF, (ctxt->hdr.id[3]>>16)&0xFF,
+		  (ctxt->hdr.id[3]>>8)&0xFF, ctxt->hdr.id[3]&0xFF,
+                  (ctxt->hdr.id[4]>>24)&0xFF, (ctxt->hdr.id[4]>>16)&0xFF,
+		  (ctxt->hdr.id[4]>>8)&0xFF, ctxt->hdr.id[4]&0xFF,
+                  (ctxt->hdr.id[5]>>24)&0xFF, (ctxt->hdr.id[5]>>16)&0xFF,
+		  (ctxt->hdr.id[5]>>8)&0xFF, ctxt->hdr.id[5]&0xFF,
+                  (ctxt->hdr.id[6]>>24)&0xFF, (ctxt->hdr.id[6]>>16)&0xFF,
+		  (ctxt->hdr.id[6]>>8)&0xFF, ctxt->hdr.id[6]&0xFF,
+                  (ctxt->hdr.id[7]>>24)&0xFF, (ctxt->hdr.id[7]>>16)&0xFF,
+		  (ctxt->hdr.id[7]>>8)&0xFF, ctxt->hdr.id[7]&0xFF,
                   ctxt->bootImageFile);
         }
 
