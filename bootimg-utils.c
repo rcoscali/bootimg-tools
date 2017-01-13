@@ -16,11 +16,14 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
 #include <values.h>
 #include <string.h>
 #include <strings.h>
 #include <getopt.h>
 #include <alloca.h>
+#include <libgen.h>
 
 #include "bootimg.h"
 #include "bootimg-priv.h"
@@ -40,9 +43,10 @@ getLongOptionName(struct option *opt, char option)
  * Return an image file name
  */
 const char *
-getImageFilename(const char *basename, const char *outdir, int kind)
+getImageFilename(const char *basenm, const char *outdir, int kind)
 {
   /* Verbosity flag (from command line options) */
+  char *bname = strdup(basenm);
   extern int vflag;
   extern char *progname;
   char *pathname;
@@ -56,77 +60,78 @@ getImageFilename(const char *basename, const char *outdir, int kind)
     {
       /* strip extension for boot image files */
     case BOOTIMG_BOOTIMG_FILENAME:
-      *(strchrnul(basename, '.')) = 0;
+      *(strchrnul(bname, '.')) = 0;
       break;
     default:
       /* else change extension .<ext> in _<ext> for all other images */
-      if (strrchr(basename, '.'))
-        *(strrchr(basename, '.')) = '_';
+      if (strrchr(bname, '.'))
+        *(strrchr(bname, '.')) = '_';
     }
-  if (basename[0] == '/')
+  if (bname[0] == '/')
     basenameIsAbsolute = 1;
+  
   /* Then create file pathname according to its type */
   switch (kind)
     {
     case BOOTIMG_BOOTIMG_FILENAME:
       sprintf(pathname,
               basenameIsAbsolute ? "%s.img" : "%s/%s.img",
-              basenameIsAbsolute ? basename : outdir,
-              basename);
+              basenameIsAbsolute ? bname : outdir,
+              bname);
       if (vflag > 2)
         fprintf(stdout, "%s: Boot Image filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_XML_FILENAME:
-      sprintf(pathname, "%s.xml", basename);
+      sprintf(pathname, "%s.xml", bname);
       if (vflag > 2)
         fprintf(stdout, "%s: XML Metadata filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_JSON_FILENAME:
-      sprintf(pathname, "%s.json", basename);
+      sprintf(pathname, "%s.json", bname);
       if (vflag > 2)
         fprintf(stdout, "%s: JSON Metadata filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_KERNEL_FILENAME:
       sprintf(pathname,
               basenameIsAbsolute ? "%s.img" : "%s/%s.zImage",
-              basenameIsAbsolute ? basename : outdir,
-              basename);
+              basenameIsAbsolute ? bname : outdir,
+              bname);
       if (vflag > 2)
         fprintf(stdout, "%s: KERNEL filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_RAMDISK_FILENAME:
       sprintf(pathname,
               basenameIsAbsolute ? "%s.cpio.gz" : "%s/%s.cpio.gz",
-              basenameIsAbsolute ? basename : outdir,
-              basename);
+              basenameIsAbsolute ? bname : outdir,
+              bname);
       if (vflag > 2)
         fprintf(stdout, "%s: RAMDISK filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_SECOND_LOADER_FILENAME:
       sprintf(pathname,
               basenameIsAbsolute ? "%s-2ndldr.img" : "%s/%s-2ndldr.img",
-              basenameIsAbsolute ? basename : outdir,
-              basename);
+              basenameIsAbsolute ? bname : outdir,
+              bname);
       if (vflag > 2)
         fprintf(stdout, "%s: 2nd BOOTLOADER filename = '%s'\n", progname, pathname);
       break;
     case BOOTIMG_DTB_FILENAME:
       sprintf(pathname,
               basenameIsAbsolute ? "%s.dtb" : "%s/%s.dtb",
-              basenameIsAbsolute ? basename : outdir,
-              basename);
+              basenameIsAbsolute ? bname : outdir,
+              bname);
       if (vflag > 2)
         fprintf(stdout, "%s: DTB filename = '%s'\n", progname, pathname);
       break;
     default:
-      sprintf(pathname, "%s-unknown.dat", basename);
+      sprintf(pathname, "%s-unknown.dat", bname);
       fprintf(stderr, "%s: error: Unknown filename = '%s'\n", progname, pathname);
       break;
     }
   
   if (vflag == 2)
     fprintf(stdout, "%s: using file with name '%s'\n", progname, pathname);
-    
+
   return strdup(pathname);
 }
 
@@ -144,6 +149,49 @@ initBootImgHeader(boot_img_hdr *hdr)
   
   return hdr;
 }
+
+/*
+ *
+ */
+const char *getDirname(const char *pathname, uint8_t flags)
+{
+  char buffer[PATH_MAX+1];
+  char *dir_name_ptr;
+
+  bzero((void *)buffer, PATH_MAX+1);
+  memcpy((void *)buffer, pathname, BOOTIMG_MAX(PATH_MAX, strlen(pathname)));
+  dir_name_ptr = dirname((char *)pathname);
+  if (dir_name_ptr[0] != '/' && (flags & FLAG_GET_DIRNAME_ABSOLUTE) != 0)
+    {
+      char rootpath[PATH_MAX+1];
+      char *cwd = realpath(".", rootpath);
+      sprintf(buffer, "%s/%s", cwd, dir_name_ptr);
+      return realpath(dir_name_ptr, NULL);
+    }
+  else  
+    return strdup(dir_name_ptr);
+}
+
+/*
+ *
+ */
+const char *getBasename(const char *pathname, const char *ext)
+{
+  char buffer[PATH_MAX+1];
+  unsigned short pathname_len = 0, ext_len = 0;
+  char *base_name_ptr = (char *)NULL, *ext_ptr = (char *)NULL;
+
+  bzero((void *)buffer, PATH_MAX+1);
+  pathname_len = strlen(pathname);
+  ext_len = strlen(ext)+1; /* +1 4 dot */
+  memcpy((void *)buffer, pathname, BOOTIMG_MAX(PATH_MAX, strlen(pathname)));
+  ext_ptr = strstr(buffer, ext) -1;
+  if (ext_ptr == buffer + (pathname_len - ext_len))
+    *ext_ptr = '\0';
+  base_name_ptr = rindex(buffer, '/') ? rindex(buffer, '/')+1 : buffer;
+  return strdup(base_name_ptr);
+}
+
 
 /* Local Variables:                                                */
 /* mode: C                                                         */

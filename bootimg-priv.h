@@ -44,39 +44,43 @@
 #define BOOTIMG_DTB_FILENAME 6
 
 /* XML local name for #text nodes */
-#define BOOTIMG_XMLTYPE_TEXT_NAME            "#text"
+#define BOOTIMG_XMLTYPE_TEXT_NAME            	BAD_CAST"#text"
 
 /* XML element local names */
-#define BOOTIMG_XMLELT_BOOTIMAGE_NAME        "bootImage"
-#define BOOTIMG_XMLELT_BOOTIMAGEFILE_NAME    "bootImageFile"
-#define BOOTIMG_XMLELT_CMDLINE_NAME          "cmdLine"
-#define BOOTIMG_XMLELT_BOARDNAME_NAME        "boardName"
-#define BOOTIMG_XMLELT_BASEADDR_NAME         "baseAddr"
-#define BOOTIMG_XMLELT_PAGESIZE_NAME         "pageSize"
-#define BOOTIMG_XMLELT_KERNELOFFSET_NAME     "kernelOffset"
-#define BOOTIMG_XMLELT_RAMDISKOFFSET_NAME    "ramdiskOffset"
-#define BOOTIMG_XMLELT_SECONDOFFSET_NAME     "secondOffset"
-#define BOOTIMG_XMLELT_TAGSOFFSET_NAME       "tagsOffset"
-#define BOOTIMG_XMLELT_BOARDOSVERSION_NAME   "boardOsVersion"
-#define BOOTIMG_XMLELT_VALUE_NAME            "value"
-#define BOOTIMG_XMLELT_MAJOR_NAME            "major"
-#define BOOTIMG_XMLELT_MINOR_NAME            "minor"
-#define BOOTIMG_XMLELT_MICRO_NAME            "micro"
-#define BOOTIMG_XMLELT_VALUESTR_NAME         "valueStr"
-#define BOOTIMG_XMLELT_COMMENT_NAME          "comment"
-#define BOOTIMG_XMLELT_BOARDOSPATCHLVL_NAME  "boardOsPatchLvl"
-#define BOOTIMG_XMLELT_YEAR_NAME             "year"
-#define BOOTIMG_XMLELT_MONTH_NAME            "month"
-#define BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME  "kernelImageFile"
-#define BOOTIMG_XMLELT_RAMDISKIMAGEFILE_NAME "ramdiskImageFile"
-#define BOOTIMG_XMLELT_SECONDIMAGEFILE_NAME  "secondImageFile"
-#define BOOTIMG_XMLELT_DTBIMAGEFILE_NAME     "dtbImageFile"
+#define BOOTIMG_XMLELT_BOOTIMAGE_NAME        	BAD_CAST"bootImage"
+#define BOOTIMG_XMLELT_BOOTIMAGEFILE_NAME    	BAD_CAST"bootImageFile"
+#define BOOTIMG_XMLELT_CMDLINE_NAME          	BAD_CAST"cmdLine"
+#define BOOTIMG_XMLELT_BOARDNAME_NAME        	BAD_CAST"boardName"
+#define BOOTIMG_XMLELT_BASEADDR_NAME         	BAD_CAST"baseAddr"
+#define BOOTIMG_XMLELT_PAGESIZE_NAME         	BAD_CAST"pageSize"
+#define BOOTIMG_XMLELT_KERNELOFFSET_NAME     	BAD_CAST"kernelOffset"
+#define BOOTIMG_XMLELT_RAMDISKOFFSET_NAME    	BAD_CAST"ramdiskOffset"
+#define BOOTIMG_XMLELT_SECONDOFFSET_NAME     	BAD_CAST"secondOffset"
+#define BOOTIMG_XMLELT_TAGSOFFSET_NAME       	BAD_CAST"tagsOffset"
+#define BOOTIMG_XMLELT_BOARDOSVERSION_NAME   	BAD_CAST"boardOsVersion"
+#define BOOTIMG_XMLELT_VALUE_NAME            	BAD_CAST"value"
+#define BOOTIMG_XMLELT_MAJOR_NAME            	BAD_CAST"major"
+#define BOOTIMG_XMLELT_MINOR_NAME            	BAD_CAST"minor"
+#define BOOTIMG_XMLELT_MICRO_NAME            	BAD_CAST"micro"
+#define BOOTIMG_XMLELT_VALUESTR_NAME         	BAD_CAST"valueStr"
+#define BOOTIMG_XMLELT_COMMENT_NAME          	BAD_CAST"comment"
+#define BOOTIMG_XMLELT_BOARDOSPATCHLVL_NAME  	BAD_CAST"boardOsPatchLvl"
+#define BOOTIMG_XMLELT_YEAR_NAME             	BAD_CAST"year"
+#define BOOTIMG_XMLELT_MONTH_NAME            	BAD_CAST"month"
+#define BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME  	BAD_CAST"kernelImageFile"
+#define BOOTIMG_XMLELT_RAMDISKIMAGEFILE_NAME 	BAD_CAST"ramdiskImageFile"
+#define BOOTIMG_XMLELT_SECONDIMAGEFILE_NAME  	BAD_CAST"secondImageFile"
+#define BOOTIMG_XMLELT_DTBIMAGEFILE_NAME     	BAD_CAST"dtbImageFile"
 
-#define ELEMENT_FLAG_UNDEFINED 0
-#define ELEMENT_FLAG_OPENED 1
-#define ELEMENT_FLAG_CLOSED 2
+#define ELEMENT_FLAG_UNDEFINED 			0
+#define ELEMENT_FLAG_OPENED 			1
+#define ELEMENT_FLAG_CLOSED 			2
+
+#define FLAG_GET_DIRNAME_NONE			0x00
+#define FLAG_GET_DIRNAME_ABSOLUTE		0x01
 
 #define BOOTIMG_MIN(x,y) ((x) < (y) ? (x) : (y))
+#define BOOTIMG_MAX(x,y) ((x) > (y) ? (x) : (y))
 
 #define FLAG4MEMBER(x, t)                       \
   int x##Flag;                                  \

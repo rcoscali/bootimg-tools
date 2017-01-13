@@ -24,6 +24,8 @@
 struct boot_img_hdr *initBootImgHeader(struct boot_img_hdr *);
 const char *getLongOptionName(struct option *, char);
 const char *getImageFilename(const char *, const char *, int);
+const char *getDirname(const char *, uint8_t flags);
+const char *getBasename(const char *, const char *);
 
 #endif /* __BOOTIMG_UTILS_H__ */
 
