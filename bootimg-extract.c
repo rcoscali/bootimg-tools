@@ -235,33 +235,33 @@ main(int argc, char **argv)
         case 0:
           switch (rrflag)
             {
-          	  case 0:
-          		basename_rr = optarg;
-                brrflag = 0;
-                if (vflag > 3)
-        	      fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), basename_rr);
-                break;
+            case 0:
+              basename_rr = optarg;
+              brrflag = 0;
+              if (vflag > 3)
+                fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), basename_rr);
+              break;
 
-          	  case 1:
-                extension_rr = optarg;
-                errflag = 0;
-                if (vflag > 3)
-            	  fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), extension_rr);
-                break;
+            case 1:
+              extension_rr = optarg;
+              errflag = 0;
+              if (vflag > 3)
+                fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), extension_rr);
+              break;
 
-          	  case 2:
-                filename_rr = optarg;
-                frrflag = 0;
-                if (vflag > 3)
-            	  fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), filename_rr);
-                break;
+            case 2:
+              filename_rr = optarg;
+              frrflag = 0;
+              if (vflag > 3)
+                fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), filename_rr);
+              break;
 
-          	  case 3:
-                pathname_rr = optarg;
-                prrflag = 0;
-                if (vflag > 3)
-            	  fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), pathname_rr);
-                break;
+            case 3:
+              pathname_rr = optarg;
+              prrflag = 0;
+              if (vflag > 3)
+                fprintf(stdout, "%s: option %s set to '%s'\n", progname, getLongOptionName(long_options, rrflag), pathname_rr);
+              break;
             }
           rrflag = 0;
           break;
@@ -287,10 +287,10 @@ main(int argc, char **argv)
                 if (oval[0] == '.' && oval[1] == '/')
                   oval = &oval[2];
                 sprintf(newval,
-                		"%s%s%s",
-                		oldval,
-						(oldval[strlen(oldval)-1]=='/'?"":"/"),
-						oval);
+                        "%s%s%s",
+                        oldval,
+                        (oldval[strlen(oldval)-1]=='/'?"":"/"),
+                        oval);
                 oval = strdup(newval);
               }
             free((void *)oldval);
@@ -327,8 +327,8 @@ main(int argc, char **argv)
           if (vflag > 3)
             fprintf(stderr, "%s: option %s/%c (=%d) set\n",
                     progname, getLongOptionName(long_options, c), c, iflag);
-	  break;
-	  
+          break;
+          
         case 'p':
           pflag = 1;
           pval = strtol(optarg, NULL, 10);
@@ -362,36 +362,36 @@ main(int argc, char **argv)
   if (optind < argc)
     {
       while (optind < argc)
-	{
-	  if (!oflag)
-	    {
-	      oval = strdup(basename(argv[optind]));
-	      if (!oval)
-		{
-		  fprintf(stderr, "%s: error: cannot allocate memory for output directory name!\n", progname);
-		  exit (1);
-		}
-	    }
+        {
+          if (!oflag)
+            {
+              oval = strdup(basename(argv[optind]));
+              if (!oval)
+                {
+                  fprintf(stderr, "%s: error: cannot allocate memory for output directory name!\n", progname);
+                  exit (1);
+                }
+            }
   
-	  struct stat statbuf;
-	  if (stat(oval, &statbuf) == -1 && errno == ENOENT)
-	    {
-	      if (mkdir(oval, 0755) == -1)
-		{
-		  perror(progname);
-		  fprintf(stderr, "%s: error: Cannot create output directory !\n", progname);
-		  exit(1);
-		}
-	    }
+          struct stat statbuf;
+          if (stat(oval, &statbuf) == -1 && errno == ENOENT)
+            {
+              if (mkdir(oval, 0755) == -1)
+                {
+                  perror(progname);
+                  fprintf(stderr, "%s: error: Cannot create output directory !\n", progname);
+                  exit(1);
+                }
+            }
 
-	  if (extractBootImageMetadata(argv[optind++], oval) && vflag)
-	    fprintf(stdout, "%s: image data successfully extracted from '%s'\n", progname, argv[optind-1]);
-	  else if (vflag)
-	    fprintf(stderr, "%s: error: image data extraction failure for '%s'\n", progname, argv[optind-1]);
+          if (extractBootImageMetadata(argv[optind++], oval) && vflag)
+            fprintf(stdout, "%s: image data successfully extracted from '%s'\n", progname, argv[optind-1]);
+          else if (vflag)
+            fprintf(stderr, "%s: error: image data extraction failure for '%s'\n", progname, argv[optind-1]);
 
-	  if (!oflag)
-	    free(oval);
-	}
+          if (!oflag)
+            free(oval);
+        }
 
       /*
        * Cleanup function for the XML library.
@@ -495,16 +495,16 @@ extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char 
           fwrite(ramdisk, hdr->ramdisk_size, 1, r);
           fclose(r);
 
-	  if (Fflag)
-	    {
-	      const char fsdir[PATH_MAX];
+          if (Fflag)
+            {
+              const char fsdir[PATH_MAX];
 
-	      sprintf((char *)fsdir, "%s/%s", outdir, filename);
-	      if (rindex(fsdir, '.'))
-		*(rindex(fsdir, '.')) = '\0';
-	      extractRamdiskFiles(outdir, filename);
-	    }
-	  
+              sprintf((char *)fsdir, "%s/%s", outdir, filename);
+              if (rindex(fsdir, '.'))
+                *(rindex(fsdir, '.')) = '\0';
+              extractRamdiskFiles(outdir, filename);
+            }
+          
           free((void *)filename);
         }
     }
@@ -594,26 +594,26 @@ rewrite(char *str, const char *rule)
   if ((fp = popen(command, "r")) != NULL)
     {
       if (!(rewrote = (char *)malloc(BUF_LENGTH)))
-	fprintf(stderr,
-		"%s: error: cannot allocate buffer for rewriting !\n",
-		progname);
+        fprintf(stderr,
+                "%s: error: cannot allocate buffer for rewriting !\n",
+                progname);
 
       else
-	{
-	  if (fgets(rewrote, sizeof(rewrote), fp) == NULL)
-	    {
-	      fprintf(stderr,
-		      "%s: error: cannot read from pipe for rewrite !\n",
-		      progname);
-	    }
-	  else
-	    {
-	      if (vflag)
-		fprintf(stdout,
-			"%s: '%s' rewrote in '%s'\n",
-			progname, str, rewrote);
-	    }
-	}
+        {
+          if (fgets(rewrote, sizeof(rewrote), fp) == NULL)
+            {
+              fprintf(stderr,
+                      "%s: error: cannot read from pipe for rewrite !\n",
+                      progname);
+            }
+          else
+            {
+              if (vflag)
+                fprintf(stdout,
+                        "%s: '%s' rewrote in '%s'\n",
+                        progname, str, rewrote);
+            }
+        }
       pclose(fp);
     }
   
@@ -626,8 +626,10 @@ rewrite(char *str, const char *rule)
 char *
 rewriteFilename(const char *pathname)
 {
-  char *dir_name = strdup(dirname((char *)pathname));
-  char *base_name = strdup(basename((char *)pathname));
+  char *pathname_copy = strdup(pathname), *pathname_2free = pathname_copy;
+  char *dir_name = strdup(dirname(pathname_copy));
+  char *pathname_2free2 = pathname, *base_name_2free = strdup(pathname);
+  base_name = basename(pathname);
   char *extension = rindex(pathname, '.') ? strdup(rindex(pathname, '.')+1) : NULL;
   char *file_name = (char *)NULL;
   char *path_name = (char *)NULL;
@@ -637,40 +639,43 @@ rewriteFilename(const char *pathname)
       fprintf(stderr, "%s: error: cannot allocate dirname/basename!\n", progname);
 
       if (dir_name)
-	free((void *)dir_name);
+        free((void *)dir_name);
       if (base_name)
-	free((void *)base_name);
+        free((void *)base_name);
       return (char *)NULL;
     }
+
+  if (rindex(base_name, '.'))
+    *(rindex(base_name, '.')) = '\0';
 
   if (brrflag)
     {
       base_name = rewrite(base_name, basename_rr);
       if (!base_name)
-	{
-	  fprintf(stderr, "%s: error: cannot rewrite basename!\n", progname);
-	  
-	  free((void *)dir_name);
-	  
-	  return (char *)NULL;
-	}
+        {
+          fprintf(stderr, "%s: error: cannot rewrite basename!\n", progname);
+          
+          free((void *)dir_name);
+          
+          return (char *)NULL;
+        }
     }
   
   if (extension && errflag)
     {
       extension = rewrite(extension, extension_rr);
       if (!extension)
-	{
-	  fprintf(stderr, "%s: error: cannot rewrite extension!\n", progname);
-	  
-	  free((void *)dir_name);
-	  free((void *)base_name);
-	  
-	  return (char *)NULL;
-	}
+        {
+          fprintf(stderr, "%s: error: cannot rewrite extension!\n", progname);
+          
+          free((void *)dir_name);
+          free((void *)base_name);
+          
+          return (char *)NULL;
+        }
     }
 
-  int file_name_len = strlen(base_name) + (extension ? strlen(extension) + 1 : 0);
+  int file_name_len = strlen(base_name) + (extension ? strlen(extension) + 2 : 0);
   file_name = (char *)malloc(file_name_len);
   if (!file_name)
     {
@@ -679,13 +684,13 @@ rewriteFilename(const char *pathname)
       free((void *)base_name);
       free((void *)dir_name);
       if (extension)
-	free((void *)extension);
+        free((void *)extension);
       
       return (char *)NULL;
     }  
   snprintf(file_name, file_name_len,
-	   "%s%s%s",
-	   base_name, extension ? "." : "", extension ? extension : "");
+           "%s%s%s",
+           base_name, extension ? "." : "", extension ? extension : "");
   
   free((void *)base_name);
   if (extension)
@@ -695,16 +700,16 @@ rewriteFilename(const char *pathname)
     {
       file_name = rewrite(file_name, filename_rr);
       if (!file_name)
-	{
-	  fprintf(stderr, "%s: error: cannot rewrite filename!\n", progname);
-	  
-	  free((void *)dir_name);
-	  
-	  return (char *)NULL;
-	}
+        {
+          fprintf(stderr, "%s: error: cannot rewrite filename!\n", progname);
+          
+          free((void *)dir_name);
+          
+          return (char *)NULL;
+        }
     }
   
-  int path_name_len = strlen(dir_name) + strlen(base_name) + (extension ? strlen(extension) + 1 : 0) + 3;
+  int path_name_len = strlen(dir_name) + strlen(file_name) + 2;
   path_name = (char *)malloc(path_name_len);
   if (!path_name)
     {
@@ -715,20 +720,22 @@ rewriteFilename(const char *pathname)
       return (char *)NULL;
     }
   snprintf(path_name, path_name_len,
-	   "%s/%s%s%s",
-	   dir_name, base_name, extension ? "." : "", extension ? extension : "");
+           "%s/%s",
+           dir_name, file_name);
   
   free((void *)dir_name);
+  free((void *)pathname_2free);
+  free((void *)pathname_2free2);
 
   if (prrflag)
     {
       path_name = rewrite(path_name, pathname_rr);
       if (!path_name)
-	{
-	  fprintf(stderr, "%s: error: cannot rewrite pathname!\n", progname);
-	  
-	  return (char *)NULL;
-	}
+        {
+          fprintf(stderr, "%s: error: cannot rewrite pathname!\n", progname);
+          
+          return (char *)NULL;
+        }
     }
   
   return (char *)path_name;
@@ -767,28 +774,28 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
       total_read = offset;
       
       if (vflag)
-	fprintf(stdout,
-		"%s: Magic found at offset %ld in file '%s'\n",
-		progname, offset, imgfile);
+        fprintf(stdout,
+                "%s: Magic found at offset %ld in file '%s'\n",
+                progname, offset, imgfile);
       
       if (iflag)
-	{
-	  fprintf(stdout,
-		  "%s: Boot Image Identification:\n"
-		  "%s  \t%02x%02x%02x%02x%02x%02x%02x%02x"
-		  "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x"
-		  "%02x%02x%02x%02x%02x%02x%02x%02x\t %s\n",
-		  progname, blankname, 
-		  (hdr->id[0]>>24)&0xFF, (hdr->id[0]>>16)&0xFF, (hdr->id[0]>>8)&0xFF, hdr->id[0]&0xFF,
-		  (hdr->id[1]>>24)&0xFF, (hdr->id[1]>>16)&0xFF, (hdr->id[1]>>8)&0xFF, hdr->id[1]&0xFF,
-		  (hdr->id[2]>>24)&0xFF, (hdr->id[2]>>16)&0xFF, (hdr->id[2]>>8)&0xFF, hdr->id[2]&0xFF,
-		  (hdr->id[3]>>24)&0xFF, (hdr->id[3]>>16)&0xFF, (hdr->id[3]>>8)&0xFF, hdr->id[3]&0xFF,
-		  (hdr->id[4]>>24)&0xFF, (hdr->id[4]>>16)&0xFF, (hdr->id[4]>>8)&0xFF, hdr->id[4]&0xFF,
-		  (hdr->id[5]>>24)&0xFF, (hdr->id[5]>>16)&0xFF, (hdr->id[5]>>8)&0xFF, hdr->id[5]&0xFF,
-		  (hdr->id[6]>>24)&0xFF, (hdr->id[6]>>16)&0xFF, (hdr->id[6]>>8)&0xFF, hdr->id[6]&0xFF,
-		  (hdr->id[7]>>24)&0xFF, (hdr->id[7]>>16)&0xFF, (hdr->id[7]>>8)&0xFF, hdr->id[7]&0xFF,
-		  imgfile);
-	}
+        {
+          fprintf(stdout,
+                  "%s: Boot Image Identification:\n"
+                  "%s  \t%02x%02x%02x%02x%02x%02x%02x%02x"
+                  "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x"
+                  "%02x%02x%02x%02x%02x%02x%02x%02x\t %s\n",
+                  progname, blankname, 
+                  (hdr->id[0]>>24)&0xFF, (hdr->id[0]>>16)&0xFF, (hdr->id[0]>>8)&0xFF, hdr->id[0]&0xFF,
+                  (hdr->id[1]>>24)&0xFF, (hdr->id[1]>>16)&0xFF, (hdr->id[1]>>8)&0xFF, hdr->id[1]&0xFF,
+                  (hdr->id[2]>>24)&0xFF, (hdr->id[2]>>16)&0xFF, (hdr->id[2]>>8)&0xFF, hdr->id[2]&0xFF,
+                  (hdr->id[3]>>24)&0xFF, (hdr->id[3]>>16)&0xFF, (hdr->id[3]>>8)&0xFF, hdr->id[3]&0xFF,
+                  (hdr->id[4]>>24)&0xFF, (hdr->id[4]>>16)&0xFF, (hdr->id[4]>>8)&0xFF, hdr->id[4]&0xFF,
+                  (hdr->id[5]>>24)&0xFF, (hdr->id[5]>>16)&0xFF, (hdr->id[5]>>8)&0xFF, hdr->id[5]&0xFF,
+                  (hdr->id[6]>>24)&0xFF, (hdr->id[6]>>16)&0xFF, (hdr->id[6]>>8)&0xFF, hdr->id[6]&0xFF,
+                  (hdr->id[7]>>24)&0xFF, (hdr->id[7]>>16)&0xFF, (hdr->id[7]>>8)&0xFF, hdr->id[7]&0xFF,
+                  imgfile);
+        }
       
       base_addr = hdr->kernel_addr - kernel_offset;
 
@@ -799,9 +806,9 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
             int rc;
             
             xml_filename = getImageFilename(basename, outdir, BOOTIMG_XML_FILENAME);
-	    xml_filename = rewriteFilename(xml_filename);
-	    if (!xml_filename)
-	      break;
+            xml_filename = rewriteFilename(xml_filename);
+            if (!xml_filename)
+              break;
             xmlWriter = xmlNewTextWriterDoc(&xmlDoc, 0);
             if (xmlWriter == NULL)
               {
@@ -831,11 +838,11 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 break;
               }
             const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_BOOTIMG_FILENAME);
-	    if ((tmpfname = rewriteFilename(tmpfname)))
-	      {
-		xmlTextWriterWriteAttribute(xmlWriter, "bootImageFile", tmpfname);
-		free((void *)tmpfname);
-	      }
+            if ((tmpfname = rewriteFilename(tmpfname)))
+              {
+                xmlTextWriterWriteAttribute(xmlWriter, "bootImageFile", tmpfname);
+                free((void *)tmpfname);
+              }
           }
         while (0);
 
@@ -844,9 +851,9 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
         do
           {
             json_filename = getImageFilename(basename, outdir, BOOTIMG_JSON_FILENAME);
-	    json_filename = rewriteFilename(json_filename);
-	    if (!json_filename)
-	      break;
+            json_filename = rewriteFilename(json_filename);
+            if (!json_filename)
+              break;
             jfp = fopen(json_filename, "wb");
             if (!jfp)
               {
@@ -862,11 +869,11 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 break;          
               }
             const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_BOOTIMG_FILENAME);
-	    if ((tmpfname = rewriteFilename(tmpfname)))
-	      {
-		cJSON_AddItemToObject(jsonDoc, "bootImageFile", cJSON_CreateString(tmpfname));
-		free((void *)tmpfname);
-	      }
+            if ((tmpfname = rewriteFilename(tmpfname)))
+              {
+                cJSON_AddItemToObject(jsonDoc, "bootImageFile", cJSON_CreateString(tmpfname));
+                free((void *)tmpfname);
+              }
           }
         while(0);
 
@@ -913,51 +920,51 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
               {
                 /* cmdLine */
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_CMDLINE_NAME,
-						    "%s", hdr->cmdline) < 0)
+                                                    BOOTIMG_XMLELT_CMDLINE_NAME,
+                                                    "%s", hdr->cmdline) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for cmdLine\n", progname);
                 
                 /* boardName */
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_BOARDNAME_NAME,
-						    "%s", hdr->name) < 0)
+                                                    BOOTIMG_XMLELT_BOARDNAME_NAME,
+                                                    "%s", hdr->name) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for boardName\n", progname);
 
                 /* baseAddr */
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_BASEADDR_NAME,
-						    "0x%08lx", base_addr) < 0)
+                                                    BOOTIMG_XMLELT_BASEADDR_NAME,
+                                                    "0x%08lx", base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for baseAddr\n", progname);
                 
                 /* pageSize */
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_PAGESIZE_NAME,
-						    "%d", hdr->page_size) < 0)
+                                                    BOOTIMG_XMLELT_PAGESIZE_NAME,
+                                                    "%d", hdr->page_size) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for pageSize\n", progname);
 
                 /* kernelOffset */
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_KERNELOFFSET_NAME,
-						    "0x%08lx", hdr->kernel_addr - base_addr) < 0)
+                                                    BOOTIMG_XMLELT_KERNELOFFSET_NAME,
+                                                    "0x%08lx", hdr->kernel_addr - base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for kernelOffset\n", progname);
                 
                 /* ramdiskOffset */
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_RAMDISKOFFSET_NAME,
-						    "0x%08lx", hdr->ramdisk_addr - base_addr) < 0)
+                                                    BOOTIMG_XMLELT_RAMDISKOFFSET_NAME,
+                                                    "0x%08lx", hdr->ramdisk_addr - base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for ramdiskOffset\n", progname);
                 
                 /* secondOffset */
                 if (hdr->second_size != 0 &&
                     xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_SECONDOFFSET_NAME,
-						    "0x%08lx", hdr->second_addr - base_addr) < 0)
+                                                    BOOTIMG_XMLELT_SECONDOFFSET_NAME,
+                                                    "0x%08lx", hdr->second_addr - base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for secondOffset\n", progname);
 
                 /* tagsOffset */
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_TAGSOFFSET_NAME,
-						    "0x%08lx", hdr->tags_addr - base_addr) < 0)
+                                                    BOOTIMG_XMLELT_TAGSOFFSET_NAME,
+                                                    "0x%08lx", hdr->tags_addr - base_addr) < 0)
                   fprintf(stderr, "%s: error: cannot create xml element for tagsOffset\n", progname);
                 
                 /* Add boardOsVersion element */
@@ -967,43 +974,43 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_VALUE_NAME,
-						    "0x%x", os_version) < 0)
+                                                    BOOTIMG_XMLELT_VALUE_NAME,
+                                                    "0x%x", os_version) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion value\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_MAJOR_NAME,
-						    "%d", major) < 0)
+                                                    BOOTIMG_XMLELT_MAJOR_NAME,
+                                                    "%d", major) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion major\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_MINOR_NAME,
-						    "%d", minor) < 0)
+                                                    BOOTIMG_XMLELT_MINOR_NAME,
+                                                    "%d", minor) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion minor\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_MICRO_NAME,
-						    "%d", micro) < 0)
+                                                    BOOTIMG_XMLELT_MICRO_NAME,
+                                                    "%d", micro) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion micro\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_VALUESTR_NAME,
-						    "%s", boardOsVersionStr) < 0)
+                                                    BOOTIMG_XMLELT_VALUESTR_NAME,
+                                                    "%s", boardOsVersionStr) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion valueStr\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_COMMENT_NAME,
-						    "%s", BOARD_OS_VERSION_COMMENT) < 0)
+                                                    BOOTIMG_XMLELT_COMMENT_NAME,
+                                                    "%s", BOARD_OS_VERSION_COMMENT) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsVersion comment\n", progname);
                     break;
@@ -1021,36 +1028,36 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_VALUE_NAME,
-						    "0x%x", os_patch_level) < 0)
+                                                    BOOTIMG_XMLELT_VALUE_NAME,
+                                                    "0x%x", os_patch_level) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl value\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_YEAR_NAME,
-						    "%d", year) < 0)
+                                                    BOOTIMG_XMLELT_YEAR_NAME,
+                                                    "%d", year) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl year\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_MONTH_NAME,
-						    "%d", month) < 0)
+                                                    BOOTIMG_XMLELT_MONTH_NAME,
+                                                    "%d", month) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl month\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_VALUESTR_NAME,
-						    "%s", boardOsPatchLvlStr) < 0)
+                                                    BOOTIMG_XMLELT_VALUESTR_NAME,
+                                                    "%s", boardOsPatchLvlStr) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl valueStr\n", progname);
                     break;
                   }
                 if (xmlTextWriterWriteFormatElement(xmlWriter,
-						    BOOTIMG_XMLELT_COMMENT_NAME,
-						    "%s", BOARD_OS_PATCH_LEVEL_COMMENT) < 0)
+                                                    BOOTIMG_XMLELT_COMMENT_NAME,
+                                                    "%s", BOARD_OS_PATCH_LEVEL_COMMENT) < 0)
                   {
                     fprintf(stderr, "%s: error: cannot create xml element for boardOsPatchLvl comment\n", progname);
                     break;
@@ -1145,13 +1152,13 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 
       const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
       if ((tmpfname = rewriteFilename(tmpfname)))
-	{
-	  if (xflag)
-	    xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, "%s", tmpfname);
-	  if (jflag)
-	    cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
-	  free((void *)tmpfname);
-	}
+        {
+          if (xflag)
+            xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, "%s", tmpfname);
+          if (jflag)
+            cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
+          free((void *)tmpfname);
+        }
 
       size_t ramdisk_sz = extractRamdiskImage(imgfp, hdr, outdir, basename);
       if (vflag && ramdisk_sz)
@@ -1198,14 +1205,14 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
             }
 
           tmpfname = getImageFilename(basename, outdir, BOOTIMG_DTB_FILENAME);
-	  if ((tmpfname = rewriteFilename(tmpfname)))
-	    {
-	      if (xflag)
-		xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, "%s", tmpfname);
-	      if (jflag)
-		cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
-	      free((void *)tmpfname);
-	    }
+          if ((tmpfname = rewriteFilename(tmpfname)))
+            {
+              if (xflag)
+                xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, "%s", tmpfname);
+              if (jflag)
+                cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
+              free((void *)tmpfname);
+            }
 
           total_read += hdr->dt_size;
         }
@@ -1340,19 +1347,19 @@ extractRamdiskFiles(const char *fsdir, const char *ramdisk_image)
       const char *cwd = get_current_dir_name();
       sprintf(cpio_command, "(mkdir -p %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; zcat %s | cpio -i", fsdir, fsdir, ramdisk_image);
       if ((cpio_fp = popen(cpio_command, "r")) != NULL)
-	{
-	  if (fgets(size_str, sizeof(size_str), cpio_fp) == NULL)
-	    fprintf(stderr,
-		    "%s: error: cannot read from pipe for cpio command!\n",
-		    progname);
+        {
+          if (fgets(size_str, sizeof(size_str), cpio_fp) == NULL)
+            fprintf(stderr,
+                    "%s: error: cannot read from pipe for cpio command!\n",
+                    progname);
 
-	  else
-	    if (vflag)
-	      fprintf(stdout,
-		      "%s: ramdisk extracted: %s\n",
-		      progname, size_str);
-	  pclose(cpio_fp);
-	}
+          else
+            if (vflag)
+              fprintf(stdout,
+                      "%s: ramdisk extracted: %s\n",
+                      progname, size_str);
+          pclose(cpio_fp);
+        }
       free((void *)cwd);
     }
   while (0);
