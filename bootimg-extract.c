@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <libgen.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -37,6 +38,8 @@
 #if defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED)
 
 #include "bootimg-priv.h"
+
+#define BUF_LENGTH 1024
 
 #define BOARD_OS_VERSION_COMMENT                                        \
   "This is the version of the board Operating System. It is ususally "  \
@@ -70,6 +73,7 @@ int jflag = 0;
 int nflag = 0;
 int iflag = 0;
 int pflag = 0;
+int Fflag = 0;
 int rrflag = 0;
 int brrflag = 0;
 int errflag = 0;
@@ -108,7 +112,7 @@ static const char *progusage =
   "       %s --help                                                                                         \n"
   "                                                                                                         \n"
   "       with the following options                                                                        \n"
-  "       %s --verbose|-v <lvl>  : be verbose at runtime. <lvl> is added to current verbosity level.        \n"
+  "       %s --verbose|-v [<lvl>]: be verbose at runtime. <lvl> is added to current verbosity level.        \n"
   "       %s                       If omited, one is assumed. More verbose flags imply more verbosity.      \n"
   "       %s --outdir|-o <outdir>: Save potentially big image files in the <outdir> directory               \n"
   "       %s                       Impacted images are kernel, ramdisk, second bootloader & dtb             \n"
@@ -119,6 +123,7 @@ static const char *progusage =
   "       %s                       This option is exclusive with xml.                                       \n"
   "       %s                       Only the last one will be taken into account.                            \n"
   "       %s --identify|-i       : Dump the image id.                                                       \n"
+  "       %s --fs|-F [<fsdir>]   : Extract the filesystem cpio archive in <fsdir>.                          \n"
   "       %s --pagesize|-p <pgsz>: Image page size. If not providedn, use the one specified in the file     \n"
   "       %s --name|-n <basename>: provide a basename template for the metadata file.                       \n"
   "       %s --help|-h           : display this message.                                                    \n";
@@ -133,6 +138,7 @@ struct option long_options[] = {
   {"xml",                        no_argument,       0,      'x' },
   {"json",                       no_argument,       0,      'j' },
   {"identify",                   no_argument,       0,      'i' },
+  {"fs",                         optional_argument, 0,      'F' },
   {"pagesize",                   required_argument, 0,      'p' },
   {"help",                       no_argument,       0,      'h' },
   {"image-basename-rewrite-cmd", required_argument, &rrflag, 0 },
@@ -141,7 +147,7 @@ struct option long_options[] = {
   {"image-pathname-rewrite-cmd", required_argument, &rrflag, 3 },
   {0,                            0,                 0,       0  }
 };
-#define BOOTIMG_OPTSTRING "v::o:n:xjip:h"
+#define BOOTIMG_OPTSTRING "v::o:n:xjiF::p:h"
 const char *unknown_option = "????";
 
 #define MAX_COMMAND_LENGTH 1024
@@ -163,6 +169,7 @@ size_t extractKernelImage(FILE *, boot_img_hdr *, const char *, const char *);
 size_t extractRamdiskImage(FILE *, boot_img_hdr *, const char *, const char *);
 size_t extractSecondBootloaderImage(FILE *, boot_img_hdr *, const char *, const char *);
 size_t extractDeviceTreeImage(FILE *, boot_img_hdr *, const char *, const char *);
+void extractRamdiskFiles(const char *, const char *);
 
 /*
  * Used for cJSON allocations
@@ -348,27 +355,43 @@ main(int argc, char **argv)
   prrflag = (pathname_rr != NULL);
   rrflag = brrflag || errflag || frrflag || prrflag;
 
-  struct stat statbuf;
-  if (stat(oval, &statbuf) == -1 && errno == ENOENT)
-    {
-      if (mkdir(oval, 0755) == -1)
-	{
-	  perror(progname);
-	  fprintf(stderr, "%s: error: Cannot create output directory !\n", progname);
-	  exit(1);
-	}
-    }
+  /* XML is default metadata format */
+  if (!xflag && !jflag)
+    xflag = 1;
 
   if (optind < argc)
     {
       while (optind < argc)
-        /* 
-         *
-         */
-        if (extractBootImageMetadata(argv[optind++], oval) && vflag)
-	  fprintf(stdout, "%s: image data successfully extracted from '%s'\n", progname, argv[optind-1]);
-        else if (vflag)
-          fprintf(stderr, "%s: error: image data extraction failure for '%s'\n", progname, argv[optind-1]);
+	{
+	  if (!oflag)
+	    {
+	      oval = strdup(basename(argv[optind]));
+	      if (!oval)
+		{
+		  fprintf(stderr, "%s: error: cannot allocate memory for output directory name!\n", progname);
+		  exit (1);
+		}
+	    }
+  
+	  struct stat statbuf;
+	  if (stat(oval, &statbuf) == -1 && errno == ENOENT)
+	    {
+	      if (mkdir(oval, 0755) == -1)
+		{
+		  perror(progname);
+		  fprintf(stderr, "%s: error: Cannot create output directory !\n", progname);
+		  exit(1);
+		}
+	    }
+
+	  if (extractBootImageMetadata(argv[optind++], oval) && vflag)
+	    fprintf(stdout, "%s: image data successfully extracted from '%s'\n", progname, argv[optind-1]);
+	  else if (vflag)
+	    fprintf(stderr, "%s: error: image data extraction failure for '%s'\n", progname, argv[optind-1]);
+
+	  if (!oflag)
+	    free(oval);
+	}
 
       /*
        * Cleanup function for the XML library.
@@ -471,6 +494,17 @@ extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char 
           
           fwrite(ramdisk, hdr->ramdisk_size, 1, r);
           fclose(r);
+
+	  if (Fflag)
+	    {
+	      const char fsdir[PATH_MAX];
+
+	      sprintf((char *)fsdir, "%s/%s", outdir, filename);
+	      if (rindex(fsdir, '.'))
+		*(rindex(fsdir, '.')) = '\0';
+	      extractRamdiskFiles(outdir, filename);
+	    }
+	  
           free((void *)filename);
         }
     }
@@ -549,179 +583,155 @@ extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const ch
 }
 
 char *
-rewrite(const char *basedir, const char *string)
+rewrite(char *str, const char *rule)
 {
-  char *basename;
-  char rewrote_basename[PATH_MAX];
-  char basename_rewrite_command[MAX_COMMAND_LENGTH];
-  FILE *basename_fp;
-  char *extension;
-  char rewrote_extension[PATH_MAX];
-  char extension_rewrite_command[MAX_COMMAND_LENGTH];
-  FILE *extension_fp;
-  char *filename;
-  char rewrote_filename[PATH_MAX];
-  char filename_rewrite_command[MAX_COMMAND_LENGTH];
-  FILE *filename_fp;
-  char *pathname;
-  char rewrote_pathname[PATH_MAX];
-  char pathname_rewrite_command[MAX_COMMAND_LENGTH];
-  FILE *pathname_fp;
+  char command[MAX_COMMAND_LENGTH+1];
+  FILE *fp = (FILE *)NULL;
+  char *rewrote = (char *)NULL;
 
-  char have_extension = 0;
-  char is_absolute = 0;
-
-  char *string2 = NULL;
-  char *dir = NULL;
-
-  /* if provided string have an extension */
-  if (rindex(string, '.') != (char *)NULL)
-    have_extension = 1;
-  if (string[0] == '/')
+  bzero((void *)command, MAX_COMMAND_LENGTH+1);
+  snprintf(command, MAX_COMMAND_LENGTH, "echo -n '%s' | sed -e '%s'", str, rule);
+  if ((fp = popen(command, "r")) != NULL)
     {
-      is_absolute = 1;
-      dir = rindex(string, '/') +1;
-    }
+      if (!(rewrote = (char *)malloc(BUF_LENGTH)))
+	fprintf(stderr,
+		"%s: error: cannot allocate buffer for rewriting !\n",
+		progname);
 
-  if (!have_extension || !is_absolute)
+      else
+	{
+	  if (fgets(rewrote, sizeof(rewrote), fp) == NULL)
+	    {
+	      fprintf(stderr,
+		      "%s: error: cannot read from pipe for rewrite !\n",
+		      progname);
+	    }
+	  else
+	    {
+	      if (vflag)
+		fprintf(stdout,
+			"%s: '%s' rewrote in '%s'\n",
+			progname, str, rewrote);
+	    }
+	}
+      pclose(fp);
+    }
+  
+  return(rewrote);
+}
+
+/*
+ *
+ */
+char *
+rewriteFilename(const char *pathname)
+{
+  char *dir_name = strdup(dirname((char *)pathname));
+  char *base_name = strdup(basename((char *)pathname));
+  char *extension = rindex(pathname, '.') ? strdup(rindex(pathname, '.')+1) : NULL;
+  char *file_name = (char *)NULL;
+  char *path_name = (char *)NULL;
+
+  if (!dir_name || !base_name)
     {
-      string2 = (char *)getImageFilename(string, basedir, BOOTIMG_BOOTIMG_FILENAME);
-      dir = strdup (string2);
-      *(rindex(dir, '/') +1) = '\0';
+      fprintf(stderr, "%s: error: cannot allocate dirname/basename!\n", progname);
+
+      if (dir_name)
+	free((void *)dir_name);
+      if (base_name)
+	free((void *)base_name);
+      return (char *)NULL;
     }
-  else
-    string2 = (char *)string;
-    
-  basename = strdup(string2);
-  if (rindex(basename, '.'))
-    *(rindex(basename, '.')) = '\0';
-  if (rindex(basename, '/'))
-    basename = rindex(basename, '/') +1;
-
-  extension = strdup(string2);
-  if (rindex(extension, '.'))
-    extension = rindex(extension, '.') +1;
-
-  filename = strdup(string2);
-  if (rindex(filename, '/'))
-    filename = rindex(filename, '/') +1;
-
-  pathname = string2;
 
   if (brrflag)
     {
-      sprintf(basename_rewrite_command, "echo -n '%s' | sed -e '%s'", basename, basename_rr);
-      if ((basename_fp = popen(basename_rewrite_command, "r")) != NULL)
-        {
-          if (fgets(rewrote_basename, sizeof(rewrote_basename), basename_fp) == NULL)
-            {
-              fprintf(stderr,
-                      "%s: error: cannot read from pipe for rewrite basename!\n",
-                      progname);
-            }
-          else
-            {
-              if (vflag)
-                fprintf(stdout,
-                        "%s: basename '%s' rewrote in '%s'\n",
-                        progname, basename, rewrote_basename);
-              basename = strdup(rewrote_basename);
-              sprintf(rewrote_pathname, "%s%s.%s", dir, rewrote_basename, extension);
-            }
-          pclose(basename_fp);
-        }
+      base_name = rewrite(base_name, basename_rr);
+      if (!base_name)
+	{
+	  fprintf(stderr, "%s: error: cannot rewrite basename!\n", progname);
+	  
+	  free((void *)dir_name);
+	  
+	  return (char *)NULL;
+	}
     }
-  else
-    sprintf(rewrote_pathname, "%s%s.%s", dir, basename, extension);
-
-  if (errflag)
+  
+  if (extension && errflag)
     {
-      sprintf(extension_rewrite_command, "echo -n '%s' | sed -e '%s'", extension, extension_rr);
-      if ((extension_fp = popen(extension_rewrite_command, "r")) != NULL)
-        {
-          if (fgets(rewrote_extension, sizeof(rewrote_extension), extension_fp) == NULL)
-            {
-              fprintf(stderr,
-                      "%s: error: cannot read from pipe for rewrite extension!\n",
-                      progname);
-            }
-          else
-            {
-              if (vflag)
-                fprintf(stdout,
-                        "%s: extension '%s' rewrote in '%s'\n",
-                        progname, extension, rewrote_extension);
-              extension = strdup(rewrote_extension);
-              sprintf(rewrote_filename, "%s%s.%s", dir, basename, rewrote_extension);
-            }
-          pclose(extension_fp);
-        }
+      extension = rewrite(extension, extension_rr);
+      if (!extension)
+	{
+	  fprintf(stderr, "%s: error: cannot rewrite extension!\n", progname);
+	  
+	  free((void *)dir_name);
+	  free((void *)base_name);
+	  
+	  return (char *)NULL;
+	}
     }
-  else
-    sprintf(rewrote_pathname, "%s%s.%s", dir, basename, extension);
+
+  int file_name_len = strlen(base_name) + (extension ? strlen(extension) + 1 : 0);
+  file_name = (char *)malloc(file_name_len);
+  if (!file_name)
+    {
+      fprintf(stderr, "%s: error: cannot allocate memory for filename!\n", progname);
+      
+      free((void *)base_name);
+      free((void *)dir_name);
+      if (extension)
+	free((void *)extension);
+      
+      return (char *)NULL;
+    }  
+  snprintf(file_name, file_name_len,
+	   "%s%s%s",
+	   base_name, extension ? "." : "", extension ? extension : "");
+  
+  free((void *)base_name);
+  if (extension)
+    free((void *)extension);
 
   if (frrflag)
     {
-      free((void *)filename);
-      if (!(filename = malloc(strlen(basename) + strlen(extension) +2)))
-        perror("allocate memory for filename processing\n");
-          
-      else
-        {
-          sprintf(filename, "%s.%s", basename, extension);
-          sprintf(filename_rewrite_command, "echo -n '%s' | sed -e '%s'", filename, filename_rr);
-          if ((filename_fp = popen(filename_rewrite_command, "r")) != NULL)
-            {
-              if (fgets(rewrote_filename, sizeof(rewrote_filename), filename_fp) == NULL)
-                {
-                  fprintf(stderr,
-                          "%s: error: cannot read from pipe for rewrite filename!\n",
-                          progname);
-                }
-              else
-                {
-                  if (vflag)
-                    fprintf(stdout,
-                            "%s: filename '%s' rewrote in '%s'\n",
-                            progname, filename, rewrote_filename);
-                  filename = strdup(rewrote_filename);
-                  sprintf(rewrote_pathname, "%s%s", dir, rewrote_filename);
-                }
-              pclose(filename_fp);
-            }
-          else
-            sprintf(rewrote_pathname, "%s%s", dir, filename);
-        }
+      file_name = rewrite(file_name, filename_rr);
+      if (!file_name)
+	{
+	  fprintf(stderr, "%s: error: cannot rewrite filename!\n", progname);
+	  
+	  free((void *)dir_name);
+	  
+	  return (char *)NULL;
+	}
     }
+  
+  int path_name_len = strlen(dir_name) + strlen(base_name) + (extension ? strlen(extension) + 1 : 0) + 3;
+  path_name = (char *)malloc(path_name_len);
+  if (!path_name)
+    {
+      fprintf(stderr, "%s: error: cannot allocate memory for pathname!\n", progname);
+      
+      free((void *)dir_name);
+      
+      return (char *)NULL;
+    }
+  snprintf(path_name, path_name_len,
+	   "%s/%s%s%s",
+	   dir_name, base_name, extension ? "." : "", extension ? extension : "");
+  
+  free((void *)dir_name);
 
   if (prrflag)
     {
-      free((void *)pathname);
-      if (!(pathname = malloc(strlen(basename) + strlen(filename) +2)))
-        perror("allocate memory for pathname processing\n");
-      else
-        {
-          sprintf(pathname, "%s%s", dir, filename);
-          sprintf(pathname_rewrite_command, "echo -n '%s' | sed -e '%s'", pathname, pathname_rr);
-          if ((pathname_fp = popen(pathname_rewrite_command, "r")) != NULL)
-            {
-              if (fgets(rewrote_pathname, sizeof(rewrote_pathname), pathname_fp) == NULL)
-                {
-                  fprintf(stderr,
-                          "%s: error: cannot read from pipe for rewrite pathname!\n",
-                          progname);
-                }
-              else
-                if (vflag)
-                  fprintf(stdout,
-                          "%s: pathname '%s' rewrote in '%s'\n",
-                          progname, pathname, rewrote_pathname);
-              pclose(pathname_fp);
-            }
-        }
+      path_name = rewrite(path_name, pathname_rr);
+      if (!path_name)
+	{
+	  fprintf(stderr, "%s: error: cannot rewrite pathname!\n", progname);
+	  
+	  return (char *)NULL;
+	}
     }
-
-  return strdup(rewrote_pathname);
+  
+  return (char *)path_name;
 }
 
 /*
@@ -789,6 +799,9 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
             int rc;
             
             xml_filename = getImageFilename(basename, outdir, BOOTIMG_XML_FILENAME);
+	    xml_filename = rewriteFilename(xml_filename);
+	    if (!xml_filename)
+	      break;
             xmlWriter = xmlNewTextWriterDoc(&xmlDoc, 0);
             if (xmlWriter == NULL)
               {
@@ -818,10 +831,11 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 break;
               }
             const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_BOOTIMG_FILENAME);
-            //if (rrflag)
-              //tmpfname = rewrite(outdir, tmpfname);
-            xmlTextWriterWriteAttribute(xmlWriter, "bootImageFile", tmpfname);
-            free((void *)tmpfname);
+	    if ((tmpfname = rewriteFilename(tmpfname)))
+	      {
+		xmlTextWriterWriteAttribute(xmlWriter, "bootImageFile", tmpfname);
+		free((void *)tmpfname);
+	      }
           }
         while (0);
 
@@ -830,6 +844,9 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
         do
           {
             json_filename = getImageFilename(basename, outdir, BOOTIMG_JSON_FILENAME);
+	    json_filename = rewriteFilename(json_filename);
+	    if (!json_filename)
+	      break;
             jfp = fopen(json_filename, "wb");
             if (!jfp)
               {
@@ -845,24 +862,25 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 break;          
               }
             const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_BOOTIMG_FILENAME);
-            //if (rrflag)
-              //tmpfname = rewrite(outdir, tmpfname);
-            cJSON_AddItemToObject(jsonDoc, "bootImageFile", cJSON_CreateString(tmpfname));
-            free((void *)tmpfname);         
+	    if ((tmpfname = rewriteFilename(tmpfname)))
+	      {
+		cJSON_AddItemToObject(jsonDoc, "bootImageFile", cJSON_CreateString(tmpfname));
+		free((void *)tmpfname);
+	      }
           }
         while(0);
 
-      /* Have we at least one metadata file to create */
-      if (!jfp && !xml_filename)
-        {
-          fprintf(stderr, "%s: error: cannot save metadata %s%s%s%s!\n",
-                  progname,
-                  xflag && jflag ? "neither " : "",
-                  xflag ? "in xml" : "",
-                  xflag && jflag ? " nor ": "",
-                  jflag ? "in json" : "");
-          goto exit_on_error;
-        }
+      /* /\* Have we at least one metadata file to create *\/ */
+      /* if (!jflag && !xflag) */
+      /*   { */
+      /*     fprintf(stderr, "%s: error: cannot save metadata %s%s%s%s!\n", */
+      /*             progname, */
+      /*             xflag && jflag ? "neither " : "", */
+      /*             xflag ? "in xml" : "", */
+      /*             xflag && jflag ? " nor ": "", */
+      /*             jflag ? "in json" : ""); */
+      /*     goto exit_on_error; */
+      /*   } */
 
       /* Process OS version value */
       if (hdr->os_version != 0)
@@ -1126,13 +1144,14 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
       total_read += readPadding(imgfp, hdr->kernel_size, pval);
 
       const char *tmpfname = getImageFilename(basename, outdir, BOOTIMG_KERNEL_FILENAME);
-      //if (rrflag)
-        //tmpfname = rewrite(outdir, tmpfname);
-      if (xflag)
-        xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, "%s", tmpfname);
-      if (jflag)
-        cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
-      free((void *)tmpfname);
+      if ((tmpfname = rewriteFilename(tmpfname)))
+	{
+	  if (xflag)
+	    xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, "%s", tmpfname);
+	  if (jflag)
+	    cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
+	  free((void *)tmpfname);
+	}
 
       size_t ramdisk_sz = extractRamdiskImage(imgfp, hdr, outdir, basename);
       if (vflag && ramdisk_sz)
@@ -1141,8 +1160,6 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
         }
 
       tmpfname = getImageFilename(basename, outdir, BOOTIMG_RAMDISK_FILENAME);
-      //if (rrflag)
-        //tmpfname = rewrite(outdir, tmpfname);
       if (xflag)
         xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_RAMDISKIMAGEFILE_NAME, "%s", tmpfname);
       if (jflag)
@@ -1161,8 +1178,6 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
             }
 
           tmpfname = getImageFilename(basename, outdir, BOOTIMG_SECOND_LOADER_FILENAME);
-          //if (rrflag)
-            //tmpfname = rewrite(outdir, tmpfname);
           if (xflag)
             xmlTextWriterWriteFormatElement(xmlWriter, "secondBootloaderImageFile", "%s", tmpfname);
           if (jflag)
@@ -1183,13 +1198,14 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
             }
 
           tmpfname = getImageFilename(basename, outdir, BOOTIMG_DTB_FILENAME);
-          //if (rrflag)
-            //tmpfname = rewrite(outdir, tmpfname);
-          if (xflag)
-            xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, "%s", tmpfname);
-          if (jflag)
-            cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
-          free((void *)tmpfname);
+	  if ((tmpfname = rewriteFilename(tmpfname)))
+	    {
+	      if (xflag)
+		xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, "%s", tmpfname);
+	      if (jflag)
+		cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
+	      free((void *)tmpfname);
+	    }
 
           total_read += hdr->dt_size;
         }
@@ -1222,7 +1238,6 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 
       rc = 1;
 
-    exit_on_error:
       fclose(imgfp);
     }
   else
@@ -1311,6 +1326,38 @@ readPadding(FILE* f, unsigned itemsize, int pagesize)
 
   return count;
 }
+
+void
+extractRamdiskFiles(const char *fsdir, const char *ramdisk_image)
+{
+  do
+    {
+      char cpio_command[MAX_COMMAND_LENGTH];
+      FILE *cpio_fp;
+      char size_str[MAX_COMMAND_LENGTH];
+      struct stat statbuf;
+      
+      const char *cwd = get_current_dir_name();
+      sprintf(cpio_command, "(mkdir -p %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; zcat %s | cpio -i", fsdir, fsdir, ramdisk_image);
+      if ((cpio_fp = popen(cpio_command, "r")) != NULL)
+	{
+	  if (fgets(size_str, sizeof(size_str), cpio_fp) == NULL)
+	    fprintf(stderr,
+		    "%s: error: cannot read from pipe for cpio command!\n",
+		    progname);
+
+	  else
+	    if (vflag)
+	      fprintf(stdout,
+		      "%s: ramdisk extracted: %s\n",
+		      progname, size_str);
+	  pclose(cpio_fp);
+	}
+      free((void *)cwd);
+    }
+  while (0);
+}
+
 
 #else
 # error Cannot build with your libxml2 that does not have xmlWriter
