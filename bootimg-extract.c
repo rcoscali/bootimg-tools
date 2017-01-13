@@ -903,12 +903,12 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 	      minor = (os_version >> 7)&0x7f;
 	      micro = os_version&0x7f;
 	      if (vflag)
-		fprintf(stdout, "BOARD_OS_VERSION %d.%d.%d\n", major, minor, micro);
+		fprintf(stdout, "%s: OS_VERSION %d.%d.%d\n", progname, major, minor, micro);
 	      
 	      year = (os_patch_level >> 4) + 2000;
 	      month = os_patch_level&0xf;
 	      if (vflag)
-		fprintf(stdout, "BOARD_OS_PATCH_LEVEL %d-%02d\n", year, month);
+		fprintf(stdout, "%s: OS_PATCH_LEVEL %d-%02d\n", progname, year, month);
 	      
 	      sprintf(boardOsVersionStr, "%d.%d.%d", major, minor, micro);
 	      sprintf(boardOsPatchLvlStr, "%d-%02d", year, month);
