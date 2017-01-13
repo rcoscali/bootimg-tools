@@ -159,7 +159,7 @@ const char *getDirname(const char *pathname, uint8_t flags)
   char *dir_name_ptr;
 
   bzero((void *)buffer, PATH_MAX+1);
-  memcpy((void *)buffer, pathname, BOOTIMG_MAX(PATH_MAX, strlen(pathname)));
+  memcpy((void *)buffer, pathname, BOOTIMG_MIN(PATH_MAX, strlen(pathname)));
   dir_name_ptr = dirname((char *)pathname);
   if (dir_name_ptr[0] != '/' && (flags & FLAG_GET_DIRNAME_ABSOLUTE) != 0)
     {
