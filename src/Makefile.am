@@ -12,4 +12,4 @@ bootimg_create_SOURCES = \
 	cJSON.c \
 	cJSON_Utils.c
 
-include_HEADERS = bootimg.h bootimg-priv.h bootimg-utils.h cJSON.h cJSON_Utils.h
+noinst_HEADERS = bootimg.h bootimg-priv.h bootimg-utils.h cJSON.h cJSON_Utils.h

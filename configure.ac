@@ -2,7 +2,17 @@ AC_INIT([bootimg-tools],[1.0],[remi.cohen-scali@nagra.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror dist-bzip2])
 AC_PROG_CC
 
-CFLAGS="-D_GNU_SOURCE -D__USE_GNU"
+CFLAGS="-std=gnu11 -D_GNU_SOURCE -D__USE_GNU"
+
+# debug mode
+AC_ARG_ENABLE([debug],
+              [  --enable-debug          turn on debugging build ],
+	      [DEBUG_CFLAGS="-g -O0"]
+	      [DEBUG_CFLAGS="-O2"])
+AC_SUBST([DEBUG_CFLAGS])
+
+# maintainer mode
+AM_MAINTAINER_MODE([enable])
 
 # wanted by: src/bootimg-utils.c:57
 AC_CHECK_FUNCS([bzero])
@@ -86,7 +96,7 @@ AC_CHECK_LIB([crypto],
 AC_SUBST([CRYPTO_LIBS]) 
 
 LIBS="$LIBS $XML2_LIBS $CRYPTO_LIBS $M_LIBS"
-CFLAGS="$CFLAGS $XML2_CFLAGS"
+CFLAGS="$CFLAGS $DEBUG_CFLAGS $XML2_CFLAGS"
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile src/Makefile])
