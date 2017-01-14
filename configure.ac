@@ -1,79 +1,81 @@
+#                                               -*- Autoconf -*-
+# BootImg-Tools
+#
+#
+AC_PREREQ([2.69])
 AC_INIT([bootimg-tools],[1.0],[remi.cohen-scali@nagra.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror dist-bzip2])
+
+# Checks for programs.
 AC_PROG_CC
 
-CFLAGS="-std=gnu11 -D_GNU_SOURCE -D__USE_GNU"
-
 # debug mode
+use_debug=no
 AC_ARG_ENABLE([debug],
-              [  --enable-debug          turn on debugging build ],
-	      [DEBUG_CFLAGS="-g -O0"]
-	      [DEBUG_CFLAGS="-O2"])
+              [AS_HELP_STRING([--enable-debug],
+                              [turn on debugging build (default is no)])],
+	      [use_debug=$enable_debug])
+AC_MSG_CHECKING(debugging)
+if test $use_debug = yes;
+then
+  AC_MSG_RESULT(on)
+  DEBUG_CFLAGS="-g -O0"
+else
+  AC_MSG_RESULT(off)
+  DEBUG_CFLAGS="-O2"
+fi
 AC_SUBST([DEBUG_CFLAGS])
 
 # maintainer mode
 AM_MAINTAINER_MODE([enable])
 
-# wanted by: src/bootimg-utils.c:57
-AC_CHECK_FUNCS([bzero])
-# wanted by: src/cJSON.c:361
-AC_CHECK_FUNCS([floor])
-# wanted by: src/bootimg-create.c:589
-AC_CHECK_FUNCS([memset]) 
-# wanted by: src/bootimg-extract.c:399
-AC_CHECK_FUNCS([mkdir])
-# wanted by: src/cJSON.c:212
-AC_CHECK_FUNCS([pow])
-# wanted by: src/bootimg-utils.c:167
-AC_CHECK_FUNCS([realpath])
-# wanted by: src/cJSON.c:724
-AC_CHECK_FUNCS([strchr])
-# wanted by: src/bootimg-utils.c:49
-AC_CHECK_FUNCS([strdup])
-# wanted by: src/bootimg-utils.c:67
-AC_CHECK_FUNCS([strrchr])
-# wanted by: src/bootimg-utils.c:188
-AC_CHECK_FUNCS([strstr])
-# wanted by: src/bootimg-create.c:616
-AC_CHECK_FUNCS([strtol])
-# wanted by: src/bootimg-create.c:897
-AC_CHECK_FUNCS([strtoul])
+# Checks for libraries.
+
+# Checks for header files.
 # wanted by: src/bootimg-create.c:28
-AC_CHECK_HEADERS([fcntl.h])
-# wanted by: src/cJSON.c:30
-AC_CHECK_HEADERS([float.h])
-# wanted by: src/bootimg-utils.c:20
-AC_CHECK_HEADERS([limits.h])
-# wanted by: src/cJSON.h:31
-AC_CHECK_HEADERS([stddef.h])
-# wanted by: src/bootimg.h:19
-AC_CHECK_HEADERS([stdint.h])
-# wanted by: src/bootimg-utils.c:19
-AC_CHECK_HEADERS([stdlib.h])
-# wanted by: src/bootimg-utils.c:22
-AC_CHECK_HEADERS([string.h])
-# wanted by: src/bootimg-utils.c:23
-AC_CHECK_HEADERS([strings.h])
-# wanted by: src/bootimg-create.c:26
-AC_CHECK_HEADERS([unistd.h])
-# wanted by: src/bootimg-utils.c:21
-AC_CHECK_HEADERS([values.h])
+#          : src/cJSON.c:30
+#          : src/bootimg-utils.c:20
+#          : src/cJSON.h:31
+#          : src/bootimg.h:19
+#          : src/bootimg-utils.c:19
+#          : src/bootimg-utils.c:22
+#          : src/bootimg-utils.c:23
+#          : src/bootimg-create.c:26
+#          : src/bootimg-utils.c:21
+AC_CHECK_HEADERS([fcntl.h float.h limits.h stddef.h stdint.h stdlib.h string.h strings.h unistd.h values.h])
+
+# Checks for typedefs, structures, and compiler characteristics.
 # wanted by: src/cJSON.c:661
 AC_CHECK_HEADER_STDBOOL
-# wanted by: src/bootimg-utils.c:25
-AC_FUNC_ALLOCA
+# wanted by: src/bootimg-create.c:1273
+#          : src/bootimg-create.c:68
+#          : src/bootimg-create.c:723
+#          : src/bootimg-create.c:1309
+#          : src/bootimg-utils.c:156
+AC_TYPE_OFF_T
+AC_TYPE_SIZE_T
+AC_TYPE_SSIZE_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT8_T
+
+# Checks for library functions.
 # wanted by: src/bootimg-create.c:142
 AC_FUNC_MALLOC
-# wanted by: src/bootimg-create.c:1273
-AC_TYPE_OFF_T
-# wanted by: src/bootimg-create.c:68
-AC_TYPE_SIZE_T
-# wanted by: src/bootimg-create.c:723
-AC_TYPE_SSIZE_T
-# wanted by: src/bootimg-create.c:1309
-AC_TYPE_UINT32_T
-# wanted by: src/bootimg-utils.c:156
-AC_TYPE_UINT8_T
+# wanted by: src/bootimg-utils.c:25
+AC_FUNC_ALLOCA
+# wanted by: src/bootimg-utils.c:57
+#          : src/cJSON.c:361
+#          : src/bootimg-create.c:589
+#          : src/bootimg-extract.c:399
+#          : src/cJSON.c:212
+#          : src/bootimg-utils.c:167
+#          : src/cJSON.c:724
+#          : src/bootimg-utils.c:49
+#          : src/bootimg-utils.c:67
+#          : src/bootimg-utils.c:188
+#          : src/bootimg-create.c:616
+#          : src/bootimg-create.c:897
+AC_CHECK_FUNCS([bzero floor memset mkdir pow realpath strchr strdup strrchr strstr strtol strtoul])
 
 # Math
 AC_CHECK_LIB([m],
@@ -95,9 +97,13 @@ AC_CHECK_LIB([crypto],
 	     [AC_MSG_ERROR([libcrypto is required but was not found !!])])
 AC_SUBST([CRYPTO_LIBS]) 
 
-LIBS="$LIBS $XML2_LIBS $CRYPTO_LIBS $M_LIBS"
-CFLAGS="$CFLAGS $DEBUG_CFLAGS $XML2_CFLAGS"
+AC_DEFINE([_GNU_SOURCE], [], [uses GNU sources for libraries])
+AC_DEFINE([__USE_GNU], [], [uses GNU implems])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile src/Makefile])
+
+LIBS="$LIBS $XML2_LIBS $CRYPTO_LIBS $M_LIBS"
+CFLAGS="-std=gnu11 $DEBUG_CFLAGS $XML2_CFLAGS"
+
 AC_OUTPUT

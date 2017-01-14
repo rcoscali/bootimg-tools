@@ -1,6 +1,20 @@
+#include "config.h"
+
 #include <ctype.h>
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+#ifdef STDC_HEADERS
 #include <stdlib.h>
+#include <stddef.h>
+#else
+# ifdef HAVE_STDLIB_H
+#include <stdlib.h>
+# endif
+# ifdef HAVE_STDDEF_H
+#include <stddef.h>
+# endif
+#endif
 #include <stdio.h>
 #include "cJSON_Utils.h"
 

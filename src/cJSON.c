@@ -23,13 +23,32 @@
 /* cJSON */
 /* JSON parser in C. */
 
+#include "config.h"
+
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
 #include <stdio.h>
 #include <math.h>
+#ifdef STDC_HEADERS
 #include <stdlib.h>
+#include <stddef.h>
+#else
+# ifdef HAVE_STDLIB_H
+#include <stdlib.h>
+# endif
+# ifdef HAVE_STDDEF_H
+#include <stddef.h>
+# endif
+#endif
+#ifdef HAVE_FLOAT_H
 #include <float.h>
+#endif
+#ifdef HAVE_LIMITS_H
 #include <limits.h>
+#endif
 #include <ctype.h>
+
 #include "cJSON.h"
 
 /* Determine the number of bits that an integer has using the preprocessor */

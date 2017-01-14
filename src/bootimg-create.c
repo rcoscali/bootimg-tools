@@ -15,18 +15,34 @@
  * See the License for the specific language governing permissions and 
  * limitations under the License.
  */
-/*
- * TODO
- * Some tests still to be done for second and dtb images. Still to test with JSON.
- */
+
+#include "config.h"
 
 #include <stdio.h>
+#ifdef STDC_HEADERS
 #include <stdlib.h>
+#include <stddef.h>
+#else
+# ifdef HAVE_STDLIB_H
+#include <stdlib.h>
+# endif
+# ifdef HAVE_STDDEF_H
+#include <stddef.h>
+# endif
+#endif
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <getopt.h>
+#ifdef HAVE_FCNTL_H
 #include <fcntl.h>
+#endif
+#ifdef HAVE_ALLOCA_H
 #include <alloca.h>
+#endif
 #include <errno.h>
 #include <error.h>
 

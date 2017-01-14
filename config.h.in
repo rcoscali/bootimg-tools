@@ -135,6 +135,9 @@
 /* Version number of package */
 #undef VERSION
 
+/* uses GNU sources for libraries */
+#undef _GNU_SOURCE
+
 /* Define for Solaris 2.5.1 so the uint32_t typedef from <sys/synch.h>,
    <pthread.h>, or <semaphore.h> is not used. If the typedef were allowed, the
    #define below would cause a syntax error. */
@@ -144,6 +147,9 @@
    <pthread.h>, or <semaphore.h> is not used. If the typedef were allowed, the
    #define below would cause a syntax error. */
 #undef _UINT8_T
+
+/* uses GNU implems */
+#undef __USE_GNU
 
 /* Define to rpl_malloc if the replacement function should be used. */
 #undef malloc
