@@ -2,12 +2,19 @@
 # BootImg-Tools
 #
 #
+
 AC_PREREQ([2.69])
 AC_INIT([bootimg-tools],[1.0],[remi.cohen-scali@nagra.com])
-AM_INIT_AUTOMAKE([foreign -Wall -Werror dist-bzip2])
+AM_INIT_AUTOMAKE([foreign -Wall -Werror dist-bzip2 subdir-objects])
+LT_PREREQ([2.4.6])
+LT_INIT([])
+
+AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_MACRO_DIRS([m4])
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_LIBTOOL()
 
 # debug mode
 use_debug=no
@@ -83,27 +90,26 @@ AC_CHECK_LIB([m],
 	     [M_LIBS=-lm],
 	     [AC_MSG_ERROR([libm is required but was not found !!])])
 AC_SUBST([M_LIBS])	     
-# XML2	
-AC_CHECK_LIB([xml2],
-             [xmlNewTextWriterDoc],
-	     [XML2_LIBS=`pkg-config --libs libxml-2.0`; XML2_CFLAGS=`pkg-config --cflags libxml-2.0`],
-	     [AC_MSG_ERROR([libxml-2.0 is required but was not found !!])])
-AC_SUBST([XML2_LIBS])
+
+# Modules version requirements
+LIBXML_2_0_REQUIRED_MIN_VERSION=2.9.0
+LIBCRYPTO_REQUIRED_MIN_VERSION=1.0.2g
+
+# XML2
+PKG_CHECK_MODULES([XML2],
+                  libxml-2.0 >= $LIBXML_2_0_REQUIRED_MIN_VERSION)
+
 
 # CRYPTO
-AC_CHECK_LIB([crypto],
-             [SHA_Init],
-	     [CRYPTO_LIBS=`pkg-config --libs libcrypto`],
-	     [AC_MSG_ERROR([libcrypto is required but was not found !!])])
-AC_SUBST([CRYPTO_LIBS]) 
+PKG_CHECK_MODULES([CRYPTO],
+                  libcrypto >= $LIBCRYPTO_REQUIRED_MIN_VERSION)
 
 AC_DEFINE([_GNU_SOURCE], [], [uses GNU sources for libraries])
 AC_DEFINE([__USE_GNU], [], [uses GNU implems])
 
-AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile src/Makefile])
 
-LIBS="$LIBS $XML2_LIBS $CRYPTO_LIBS $M_LIBS"
-CFLAGS="-std=gnu11 $DEBUG_CFLAGS $XML2_CFLAGS"
+# Get rid of the default -g -O2
+CFLAGS=
 
 AC_OUTPUT
