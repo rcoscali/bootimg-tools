@@ -5,7 +5,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([bootimg-tools],[1.0],[remi.cohen-scali@nagra.com])
-AM_INIT_AUTOMAKE([foreign -Wall -Werror dist-bzip2 subdir-objects])
+AM_INIT_AUTOMAKE([foreign -Wall -Werror dist-bzip2 subdir-objects dejagnu])
 LT_PREREQ([2.4.6])
 LT_INIT([])
 
