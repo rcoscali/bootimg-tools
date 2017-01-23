@@ -19,34 +19,37 @@
 
 #include <stdio.h>
 #ifdef STDC_HEADERS
-#include <stdlib.h>
-#include <stddef.h>
+# include <stdlib.h>
+# include <stddef.h>
 #else
 # ifdef HAVE_STDLIB_H
-#include <stdlib.h>
+#  include <stdlib.h>
 # endif
 # ifdef HAVE_STDDEF_H
-#include <stddef.h>
+#  include <stddef.h>
 # endif
 #endif
 #ifdef HAVE_STRING_H
-#include <string.h>
+# include <string.h>
 #endif
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+# include <fcntl.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+# include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+# include <sys/stat.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #ifdef HAVE_ALLOCA_H
-#include <alloca.h>
+# include <alloca.h>
+#endif
+#ifdef HAVE_ASSERT_H
+# include <assert.h>
 #endif
 #include <errno.h>
 
@@ -109,6 +112,8 @@ char *nval = (char *)NULL;
 char *oval = (char *)NULL;
 /* pval: pagesize */
 size_t pval = 0L;
+/* Fval: ramdisk FS dir */
+char *Fval = (char *)NULL;
 
 /* rewrite rules */
 char *basename_rr = (char *)NULL;
@@ -327,15 +332,17 @@ main(int argc, char **argv)
             oval = optarg;
             if (oval[0] != '/')
               {
-                char newval[PATH_MAX];
+                char *newval = (char *)malloc(PATH_MAX+1);
+                assert(newval);
                 if (oval[0] == '.' && oval[1] == '/')
                   oval = &oval[2];
-                sprintf(newval,
-                        "%s%s%s",
-                        oldval,
-                        (oldval[strlen(oldval)-1]=='/'?"":"/"),
-                        oval);
-                oval = strdup(newval);
+                snprintf(newval,
+                         PATH_MAX,
+                         "%s%s%s",
+                         oldval,
+                         (oldval[strlen(oldval)-1]=='/'?"":"/"),
+                         oval);
+                oval = newval;
               }
             free((void *)oldval);
             if (vflag)
@@ -381,6 +388,26 @@ main(int argc, char **argv)
                     progname, getLongOptionName(long_options, c), c, pflag, pval);
           break;
 
+        case 'F':
+          Fflag = 1;
+          if (optarg)
+            {
+              Fval = strdup(optarg);
+              assert(Fval);
+            }
+          
+          else if (argv[optind] && argv[optind][0] != '-')
+            {
+              Fval = strdup(argv[optind]);
+              assert(Fval);
+              optind++;
+            }
+          
+          if (vflag > 3)
+            fprintf(stderr, "%s: option %s/%c (=%d) set with value '%s'\n",
+                    progname, getLongOptionName(long_options, c), c, Fflag, Fval);
+          break;
+
         case 'h':
           printusage();
           exit(1);
@@ -423,8 +450,30 @@ main(int argc, char **argv)
               if (mkdir(oval, 0755) == -1)
                 {
                   perror(progname);
-                  fprintf(stderr, "%s: error: Cannot create output directory !\n", progname);
+                  fprintf(stderr, "%s: error: Cannot create output directory '%s'!\n", progname, oval);
                   exit(1);
+                }
+            }
+          if (Fval)
+            {
+              if (Fval[0] != '/')
+                {
+                  char *Fval_tmp = (char *)malloc(PATH_MAX +1);
+
+                  assert(Fval_tmp);
+
+                  snprintf(Fval_tmp, PATH_MAX, "%s/%s", oval, Fval);
+                  free((void *)Fval);
+                  Fval = Fval_tmp;
+                }
+              if (stat(Fval, &statbuf) == -1 && errno == ENOENT)
+                {
+                  if (mkdir(Fval, 0755) == -1)
+                    {
+                      perror(progname);
+                      fprintf(stderr, "%s: error: Cannot create ramdisk output directory '%s'!\n", progname, Fval);
+                      exit(1);
+                    }
                 }
             }
 
@@ -464,6 +513,7 @@ printusage(void)
   char twolines = 2;
 
   char *str = (char *)malloc(strlen(progusage) +1);
+  assert(str);
   memcpy(str, progusage, strlen(progusage) +1);
   
   while ((tok = strtok((char *)str, "\n")) != (char *)NULL)
@@ -541,12 +591,17 @@ extractRamdiskImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const char 
 
           if (Fflag)
             {
-              const char fsdir[PATH_MAX];
+              const char fsdir[PATH_MAX+1];
 
-              sprintf((char *)fsdir, "%s/%s", outdir, filename);
+              if (Fval && Fval[0] != '/')
+                sprintf((char *)fsdir, "%s/%s", outdir, Fval);
+              else if (!Fval)
+                memcpy((void *)fsdir, (void *)filename, strlen(filename)+1);
+              else
+            	memcpy((void *)fsdir, (void *)Fval, strlen(Fval)+1);
               if (rindex(fsdir, '.'))
                 *(rindex(fsdir, '.')) = '\0';
-              extractRamdiskFiles(outdir, filename);
+              extractRamdiskFiles(fsdir, filename);
             }
           
           free((void *)filename);
@@ -682,6 +737,9 @@ rewriteFilename(const char *pathname)
   char *file_name = (char *)NULL;
   char *path_name = (char *)NULL;
 
+  assert(extension);
+  assert(pathname_2free);
+
   if (!dir_name || !base_name)
     {
       fprintf(stderr, "%s: error: cannot allocate dirname/basename!\n", progname);
@@ -706,10 +764,8 @@ rewriteFilename(const char *pathname)
       base_name = rewrite((char *)base_name, basename_rr);
       if (!base_name)
         {
-          fprintf(stderr, "%s: error: cannot rewrite basename!\n", progname);
-          
+          fprintf(stderr, "%s: error: cannot rewrite basename!\n", progname);          
           free((void *)dir_name);
-          
           return (char *)NULL;
         }
     }
@@ -765,9 +821,7 @@ rewriteFilename(const char *pathname)
       if (!file_name)
         {
           fprintf(stderr, "%s: error: cannot rewrite filename!\n", progname);
-          
           free((void *)dir_name);
-          
           return (char *)NULL;
         }
     }
@@ -777,35 +831,27 @@ rewriteFilename(const char *pathname)
   if (!path_name)
     {
       fprintf(stderr, "%s: error: cannot allocate memory for pathname!\n", progname);
-      
       free((void *)dir_name);
-      
       return (char *)NULL;
     }
   snprintf(path_name, path_name_len,
            "%s/%s",
-           dir_name, file_name);
-  
+           dir_name, file_name);  
   free((void *)dir_name);
-
   if (vflag > 2)
     fprintf(stdout,
             "%s: pathname = <%s>\n",
             progname, path_name);
-
   if (prrflag)
     {
       path_name = rewrite(path_name, pathname_rr);
       if (!path_name)
         {
-          fprintf(stderr, "%s: error: cannot rewrite pathname!\n", progname);
-          
+          fprintf(stderr, "%s: error: cannot rewrite pathname!\n", progname);          
           return (char *)NULL;
         }
-    }
-  
+    }  
   free((void *)pathname_2free);
-
   return (char *)path_name;
 }
 
@@ -826,7 +872,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
   xmlTextWriterPtr xmlWriter;
   xmlDocPtr xmlDoc;
   cJSON *jsonDoc;
-  char tmp[PATH_MAX];
+  char tmp[PATH_MAX+1];
   
   if (vflag)
     fprintf(stderr, "Image filename option: '%s'\n", imgfile);
@@ -1416,7 +1462,8 @@ readPadding(FILE* f, unsigned itemsize, int pagesize)
   byte* buf = (byte*)malloc(sizeof(byte) * pagesize);
   unsigned pagemask = pagesize - 1;
   unsigned count;
-    
+
+  assert(buf);  
   if((itemsize & pagemask) == 0)
     {
       free(buf);
@@ -1438,13 +1485,18 @@ extractRamdiskFiles(const char *fsdir, const char *ramdisk_image)
 {
   do
     {
-      char cpio_command[MAX_COMMAND_LENGTH];
+      char cpio_command[MAX_COMMAND_LENGTH+1];
       FILE *cpio_fp;
-      char size_str[MAX_COMMAND_LENGTH];
+      char size_str[MAX_COMMAND_LENGTH+1];
       struct stat statbuf;
       
       const char *cwd = get_current_dir_name();
-      sprintf(cpio_command, "(mkdir -p %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; zcat %s | cpio -i", fsdir, fsdir, ramdisk_image);
+      snprintf(cpio_command,
+    		   MAX_COMMAND_LENGTH,
+    		   "bash -c \"(rm -rf %s >/dev/null 2>&1; mkdir -p %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; zcat %s | cpio -i 2>&1)\"",
+			   fsdir, fsdir, fsdir, ramdisk_image);
+      if (vflag >= 3)
+    	fprintf(stdout, "%s: pipe cpio command = '%s'\n", progname, cpio_command);
       if ((cpio_fp = popen(cpio_command, "r")) != NULL)
         {
           if (fgets(size_str, sizeof(size_str), cpio_fp) == NULL)
