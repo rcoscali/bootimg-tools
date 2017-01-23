@@ -49,7 +49,7 @@ AM_MAINTAINER_MODE([enable])
 #          : src/bootimg-utils.c:23
 #          : src/bootimg-create.c:26
 #          : src/bootimg-utils.c:21
-AC_CHECK_HEADERS([fcntl.h float.h limits.h stddef.h stdint.h stdlib.h string.h strings.h unistd.h values.h])
+AC_CHECK_HEADERS([fcntl.h float.h limits.h stddef.h stdint.h stdlib.h string.h strings.h unistd.h values.h assert.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 # wanted by: src/cJSON.c:661

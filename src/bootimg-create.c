@@ -94,19 +94,32 @@ char *blankname = (char *)NULL;
  * Usage string
  */
 static const char *progusage =
-  "usage: %s --verbose[=<lvl>] ...] [--force] [--xml] [--json] [--name=<basename>] [--outdir=<outdir>] [--pagesize=<pgsz>] metadatafile1 [metadatafile2 ...]\n"
-  "       %s --help                                                                                         \n"
-  "                                                                                                         \n"
-  "       with the following options                                                                        \n"
-  "       %s --force|-f          : force files overwrite.                                                   \n"
-  "       %s --verbose|-v <lvl>  : be verbose at runtime. <lvl> is added to current verbosity level.        \n"
-  "       %s                       If omited, one is assumed. More verbose flags imply more verbosity.      \n"
-  "       %s --outdir|-o <outdir>: Save potentially big image files in the <outdir> directory               \n"
-  "       %s                       Impacted images are kernel, ramdisk, second bootloader & dtb             \n"
-  "       %s --pagesize|-p <pgsz>: Image page size. If not providedn, use the one specified in the file     \n"
-  "       %s --identify|-i       : display the ID field for this boot image.                                \n"
-  "       %s --help|-h           : display this message.                                                    \n"
-  "       %s The metadata files are either xml or json files as created by bootimg-extract command.         \n";
+  "usage: %s [options] metadatafile1 [metadatafile2 ...]\n"
+  "       %s --help\n"
+  "\n"
+  "       basic user options:\n"
+  "       %s --help -h                     display this message.\n"
+  "       %s --force -f                    force files overwrite.\n"
+  "       %s --verbose -v <lvl>            be verbose at runtime. <lvl> is added to\n"
+  "       %s                               current verbosity level.\n"
+  "       %s                               If omited, one is assumed. More verbose\n"
+  "       %s                               flags imply more verbosity.\n"
+  "\n"
+  "       options for controling image creation:"
+  "       %s --outdir -o <outdir>          Save potentially big image files in the\n"
+  "       %s                               <outdir> directory.\n"
+  "       %s                               Impacted images are kernel, ramdisk,\n"
+  "       %s                               second bootloader & dtb.\n"
+  "       %s --pagesize -p <pgsz>          Image page size. If not providedn, use\n"
+  "       %s                               the one specified in the file.\n"
+  "       %s --fs -F [<fsdir>]             Create the cpio archive from the files\n"
+  "       %s                               in <fsdir>.\n"
+  "\n"
+  "       options for getting extra infos:"
+  "       %s --identify -i                 display the ID field for this boot image.\n"
+  "\n"
+  "       %s The metadata files are either xml or json files as created by\n"
+  "       %s bootimg-extract command.\n";
 
 /*
  * Long options struct
@@ -118,9 +131,10 @@ struct option long_options[] = {
   {"outdir",   required_argument, 0,  'o' },
   {"pagesize", required_argument, 0,  'p' },
   {"help",     no_argument,       0,  'h' },
+  {"fs",       optional_argument, 0,  'F' },
   {0,          0,                 0,   0  }
 };
-#define BOOTIMG_OPTSTRING "v::fio:h:"
+#define BOOTIMG_OPTSTRING "v::fF::io:h:"
 const char *unknown_option = "????";
 
 /* padding buffer */
