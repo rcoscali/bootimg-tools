@@ -199,8 +199,6 @@ struct option long_options[] = {
 #define BOOTIMG_OPTSTRING "v::o:n:xjiF::p:h"
 const char *unknown_option = "????";
 
-#define MAX_COMMAND_LENGTH 1024
-
 /*
  * Getopt external defs
  */

@@ -20,28 +20,31 @@
 
 #include <stdio.h>
 #ifdef STDC_HEADERS
-#include <stdlib.h>
-#include <stddef.h>
+# include <stdlib.h>
+# include <stddef.h>
 #else
 # ifdef HAVE_STDLIB_H
-#include <stdlib.h>
+#  include <stdlib.h>
 # endif
 # ifdef HAVE_STDDEF_H
-#include <stddef.h>
+#  include <stddef.h>
 # endif
 #endif
 #ifdef HAVE_STRING_H
-#include <string.h>
+# include <string.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+# include <fcntl.h>
 #endif
 #ifdef HAVE_ALLOCA_H
-#include <alloca.h>
+# include <alloca.h>
+#endif
+#ifdef HAVE_ASSERT_H
+# include <assert.h>
 #endif
 #include <errno.h>
 #include <error.h>
@@ -75,6 +78,7 @@ int oflag = 0;
 int pflag = 0;
 int fflag = 0;
 int iflag = 0;
+int Fflag = 0;
 
 /* nval: basename */
 char *nval = (char *)NULL;
@@ -82,6 +86,8 @@ char *nval = (char *)NULL;
 char *oval = (char *)NULL;
 /* pval: pagesize */
 size_t pval = 0L;
+/* Fval: ramdisk files directory */
+char *Fval = (char *)NULL;
 
 /*
  * progname & blankname are program name and space string with progname size
@@ -360,6 +366,49 @@ setHeaderValuesFromParsingContext(bootimgParsingContext_p ctxt)
   strncpy(ctxt->hdr.name, ctxt->boardName, BOOTIMG_MIN(strlen(ctxt->boardName), BOOT_NAME_SIZE));
 }
 
+int
+createRamdiskImage(const char *fsdir, const char *ramdisk)
+{
+  int ret = 0;
+
+  do
+    {
+      char cpio_command[MAX_COMMAND_LENGTH+1];
+      FILE *cpio_fp;
+      char size_str[MAX_COMMAND_LENGTH+1];
+      struct stat statbuf;
+
+      const char *cwd = get_current_dir_name();
+      snprintf(cpio_command,
+    		   MAX_COMMAND_LENGTH,
+    		   "bash -c \"(rm -f %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; find . -print0 | cpio -o0a -H newc -R root.root -O %s 2>&1)\"",
+			   ramdisk, fsdir, ramdisk);
+      if (vflag >= 3)
+    	fprintf(stdout, "%s: pipe cpio command = '%s'\n", progname, cpio_command);
+      if ((cpio_fp = popen(cpio_command, "r")) != NULL)
+        {
+          if (fgets(size_str, sizeof(size_str), cpio_fp) == NULL)
+            {
+              fprintf(stderr,
+		      "%s: error: cannot read from pipe for cpio command!\n",
+		      progname);
+              ret = -1;
+            }
+
+          else
+            if (vflag)
+              fprintf(stdout,
+                      "%s: ramdisk image created: %s\n",
+                      progname, size_str);
+          pclose(cpio_fp);
+        }
+      free((void *)cwd);
+    }
+  while (0);
+
+  return ret;
+}
+
 /*
  * Load images, compute last hdr fields and write boot image
  */
@@ -388,6 +437,9 @@ writeImage(bootimgParsingContext_p ctxt)
                   ctxt->kernelImageFile);
           break;
         }
+
+      if (Fflag && !createRamdiskImage(Fval, ctxt->ramdiskImageFile))
+	break;
 
       /* load the ramdisk image */
       dctxt->ramdisk_data = loadImage(ctxt->ramdiskImageFile,
@@ -688,6 +740,26 @@ main(int argc, char **argv)
           if (vflag > 3)
             fprintf(stderr, "%s: option %s/%c (=%d) set with value '%lu'\n",
                     progname, getLongOptionName(long_options, c), c, pflag, pval);
+          break;
+
+        case 'F':
+          Fflag = 1;
+          if (optarg)
+            {
+              Fval = strdup(optarg);
+              assert(Fval);
+            }
+
+          else if (argv[optind] && argv[optind][0] != '-')
+            {
+              Fval = strdup(argv[optind]);
+              assert(Fval);
+              optind++;
+            }
+
+          if (vflag > 3)
+            fprintf(stderr, "%s: option %s/%c (=%d) set with value '%s'\n",
+                    progname, getLongOptionName(long_options, c), c, Fflag, Fval);
           break;
 
         case 'h':

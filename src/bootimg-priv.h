@@ -82,6 +82,8 @@
 #define BOOTIMG_MIN(x,y) ((x) < (y) ? (x) : (y))
 #define BOOTIMG_MAX(x,y) ((x) > (y) ? (x) : (y))
 
+#define MAX_COMMAND_LENGTH 1024
+
 #define FLAG4MEMBER(x, t)                       \
   int x##Flag;                                  \
   t x;
