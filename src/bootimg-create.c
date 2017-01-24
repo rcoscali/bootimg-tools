@@ -381,7 +381,7 @@ createRamdiskImage(const char *fsdir, const char *ramdisk)
       const char *cwd = get_current_dir_name();
       snprintf(cpio_command,
     		   MAX_COMMAND_LENGTH,
-    		   "bash -c \"(rm -f %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; find . -print0 | cpio -o0a -H newc -R root.root -O %s 2>&1)\"",
+    		   "bash -c \"(rm -f %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; find . -print0 | cpio -o0a -H newc -R root.root -O ramdisk.tmp 2>&1; gzip -c9 ramdisk.tmp > %s; rm -f ramdisk.tmp)\"",
 			   ramdisk, fsdir, ramdisk);
       if (vflag >= 3)
     	fprintf(stdout, "%s: pipe cpio command = '%s'\n", progname, cpio_command);
@@ -438,7 +438,7 @@ writeImage(bootimgParsingContext_p ctxt)
           break;
         }
 
-      if (Fflag && !createRamdiskImage(Fval, ctxt->ramdiskImageFile))
+      if (Fflag && createRamdiskImage(Fval, ctxt->ramdiskImageFile))
 	break;
 
       /* load the ramdisk image */
