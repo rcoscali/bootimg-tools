@@ -722,8 +722,8 @@ main(int argc, char **argv)
               }
             free((void *)oldval);
             if (vflag)
-              fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-                      progname, getLongOptionName(long_options, c), c, oflag);
+              fprintf(stderr, "%s: option %s/%c (=%d) set to '%s'\n",
+                      progname, getLongOptionName(long_options, c), c, oflag, oval);
           }
           break;
           
