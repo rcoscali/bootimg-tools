@@ -109,6 +109,12 @@
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #undef LT_OBJDIR
 
+/* openssl cflags */
+#undef OPENSSL_CFLAGS
+
+/* openssl libs */
+#undef OPENSSL_LIBS
+
 /* Name of package */
 #undef PACKAGE
 
@@ -141,8 +147,20 @@
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
 
+/* uses libxml2 */
+#undef USE_LIBXML2
+
+/* uses openssl */
+#undef USE_OPENSSL
+
 /* Version number of package */
 #undef VERSION
+
+/* xml2 cflags */
+#undef XML2_CFLAGS
+
+/* xml2 libs */
+#undef XML2_LIBS
 
 /* uses GNU sources for libraries */
 #undef _GNU_SOURCE
@@ -158,7 +176,7 @@
 #undef _UINT8_T
 
 /* uses GNU implems */
-#undef __USE_GNU
+//#undef __USE_GNU
 
 /* Define to rpl_malloc if the replacement function should be used. */
 #undef malloc

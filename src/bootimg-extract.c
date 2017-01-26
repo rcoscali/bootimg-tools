@@ -53,17 +53,30 @@
 #endif
 #include <errno.h>
 
-#include <libxml/encoding.h>
-#include <libxml/xmlwriter.h>
+#ifdef USE_LIBXML2
+# include <libxml/xmlversion.h>
+# if defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED)
+#  include <libxml/encoding.h>
+#  include <libxml/xmlwriter.h>
+# else
+#  error Cannot build with your libxml2 that does not have xmlWriter and having output disabled
+# endif /* defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED) */
+#endif
 
-#include "bootimg.h"
-#include "bootimg-utils.h"
-#include "bootimg-priv.h"
 #include "cJSON.h"
 
-#if defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED)
+#ifdef USE_OPENSSL
+# ifndef OPENSSL_NO_SHA256
+#  include <openssl/sha.h>
+#  include <openssl/err.h>
+# else
+#  error No SHA256 available in this openssl ! It is mandatory ... 
+# endif
+#endif
 
+#include "bootimg.h"
 #include "bootimg-priv.h"
+#include "bootimg-utils.h"
 
 #define BUF_LENGTH 1024
 
@@ -94,12 +107,16 @@
  */
 int vflag = 0;
 int oflag = 0;
+#ifdef USE_LIBXML2
 int xflag = 0;
+#endif
 int jflag = 0;
 int nflag = 0;
 int iflag = 0;
 int pflag = 0;
 int Fflag = 0;
+int Vflag = 0;
+int dflag = 0;
 int rrflag = 0;
 int brrflag = 0;
 int errflag = 0;
@@ -137,7 +154,8 @@ size_t base_addr = 0;
 
 static const char *progusage =
   "usage: %s [options] imgfile1 [imgfile2 ... imgfileN]\n"
-  "       %s --help\n"
+  "       %s --help\n";
+static const char *proghelp =
   "\n"
   "       basic user options:\n"
   "       %s -h --help                     display this message.\n"
@@ -145,7 +163,7 @@ static const char *progusage =
   "       %s                               added to current verbosity level.\n"
   "       %s                               If omited, one is assumed. More\n"
   "       %s                               verbose flags imply more verbosity.\n"
-  "       %s -i --identify                 Dump the image id.\n"
+  "       %s -i --identity                 Dump the image id.\n"
   "       %s -p --pagesize=<pgsz>          Image page size. If not provided,\n"
   "       %s                               use the one specified in the image\n"
   "       %s                               file.\n"
@@ -156,10 +174,12 @@ static const char *progusage =
   "       %s                               Impacted images are kernel,\n"
   "       %s                               ramdisk, second bootloader & dtb\n"
   "       %s                               ones.\n"
+#ifdef USE_LIBXML2
   "       %s -x --xml                      generate an xml metadata file.\n"
   "       %s                               This option is exclusive with json.\n"
   "       %s                               Only the last one will be taken into\n"
   "       %s                               account.\n"
+#endif
   "       %s -j --json                     generate a json metadata file.\n"
   "       %s                               This option is exclusive with xml.\n"
   "       %s                               Only the last one will be taken into\n"
@@ -174,6 +194,12 @@ static const char *progusage =
   "       %s                               filename and pathname.\n"
   "       %s -F --fs=[<fsdir>]             Extract the filesystem cpio archive.\n"
   "       %s                               in <fsdir>.\n"
+#ifdef USE_OPENSSL
+  "       %s -V --verity                   Verify VERITY signature block if one\n"
+  "       %s                               is available.\n"
+#endif
+  "       %s -d --dummy                    Dummy run: display id and verity but\n"
+  "       %s                               do not extract/create anything\n"
   "       %s -n --name=<basename>          provide a basename template for the\n"
   "       %s                               metadata file.\n";
 
@@ -184,9 +210,11 @@ struct option long_options[] = {
   {"verbose",                    optional_argument, 0,      'v' },
   {"outdir",                     required_argument, 0,      'o' },
   {"name",                       required_argument, 0,      'n' },
+#ifdef USE_LIBXML2
   {"xml",                        no_argument,       0,      'x' },
+#endif
   {"json",                       no_argument,       0,      'j' },
-  {"identify",                   no_argument,       0,      'i' },
+  {"identity",                   no_argument,       0,      'i' },
   {"fs",                         optional_argument, 0,      'F' },
   {"pagesize",                   required_argument, 0,      'p' },
   {"help",                       no_argument,       0,      'h' },
@@ -194,9 +222,25 @@ struct option long_options[] = {
   {"image-ext-rewrite-cmd",      required_argument, &rrflag, 1  },
   {"image-filename-rewrite-cmd", required_argument, &rrflag, 2  },
   {"image-pathname-rewrite-cmd", required_argument, &rrflag, 3  },
+#ifdef USE_LIBXML2
+  {"verity",                     no_argument,       0,      'V' },
+#endif
+  {"dummy",                      no_argument,       0,      'd' },
   {0,                            0,                 0,       0  }
 };
-#define BOOTIMG_OPTSTRING "v::o:n:xjiF::p:h"
+#ifdef USE_LIBXML2
+# ifdef USE_OPENSSL
+#  define BOOTIMG_OPTSTRING "v::o:n:xjiF::p:hVd"
+# else
+#  define BOOTIMG_OPTSTRING "v::o:n:xjiF::p:hd"
+# endif
+#else
+# ifdef USE_OPENSSL
+#  define BOOTIMG_OPTSTRING "v::o:n:jiF::p:hVd"
+# else
+#  define BOOTIMG_OPTSTRING "v::o:n:jiF::p:hd"
+# endif
+#endif
 const char *unknown_option = "????";
 
 /*
@@ -206,17 +250,17 @@ extern char *optarg;
 extern int optind;
 
 /*
- * Forward decl
+ * Forward decls
  */
-int extractBootImageMetadata(const char *, const char *);
-void printusage(void);
+int           extractBootImageMetadata(const char *, const char *);
+void          printusage(int);
 boot_img_hdr *findBootMagic(FILE *, boot_img_hdr *, off_t *);
-int readPadding(FILE*, unsigned, int);
-size_t extractKernelImage(FILE *, boot_img_hdr *, const char *, const char *);
-size_t extractRamdiskImage(FILE *, boot_img_hdr *, const char *, const char *);
-size_t extractSecondBootloaderImage(FILE *, boot_img_hdr *, const char *, const char *);
-size_t extractDeviceTreeImage(FILE *, boot_img_hdr *, const char *, const char *);
-void extractRamdiskFiles(const char *, const char *);
+int           readPadding(FILE*, unsigned, int);
+size_t        extractKernelImage(FILE *, boot_img_hdr *, const char *, const char *);
+size_t        extractRamdiskImage(FILE *, boot_img_hdr *, const char *, const char *);
+size_t        extractSecondBootloaderImage(FILE *, boot_img_hdr *, const char *, const char *);
+size_t        extractDeviceTreeImage(FILE *, boot_img_hdr *, const char *, const char *);
+void          extractRamdiskFiles(const char *, const char *);
 
 /*
  * Used for cJSON allocations
@@ -245,7 +289,7 @@ main(int argc, char **argv)
   int c;
   int digit_optind = 0;
   cJSON_Hooks hooks;
-
+  
   hooks.malloc_fn = my_malloc_fn;
   hooks.free_fn = my_free_fn;
   
@@ -257,13 +301,19 @@ main(int argc, char **argv)
   memset((void *)blankname, (int)' ', (size_t)strlen(progname));
   oval = get_current_dir_name();
   
+#ifdef USE_LIBXML2
   /*
    * This initialize the libxml2 library and check potential ABI
    * mismatches between the version it was compiled for and the 
    * actual shared library used.
    */
   LIBXML_TEST_VERSION;
-
+#endif
+  
+#ifdef USE_OPENSSL
+  ERR_load_crypto_strings();
+#endif
+  
   /*
    * Process options
    */
@@ -348,13 +398,15 @@ main(int argc, char **argv)
                       progname, getLongOptionName(long_options, c), c, oflag, oval);
           }
           break;
-          
+
+#ifdef USE_LIBXML2
         case 'x':
           xflag = 1;
           if (vflag > 3)
             fprintf(stderr, "%s: option %s/%c (=%d) set\n",
                     progname, getLongOptionName(long_options, c), c, xflag);
           break;
+#endif
           
         case 'j':
           jflag = 1;
@@ -374,8 +426,22 @@ main(int argc, char **argv)
         case 'i':
           iflag = 1;
           if (vflag > 3)
-            fprintf(stderr, "%s: option %s/%c (=%d) set\n",
-                    progname, getLongOptionName(long_options, c), c, iflag);
+            fprintf(stderr, "%s: option %s/%c set\n",
+                    progname, getLongOptionName(long_options, c), c);
+          break;
+          
+        case 'V':
+          Vflag = 1;
+          if (vflag > 3)
+            fprintf(stderr, "%s: option %s/%c set\n",
+                    progname, getLongOptionName(long_options, c), c);
+          break;
+          
+        case 'd':
+          dflag = 1;
+          if (vflag > 3)
+            fprintf(stderr, "%s: option %s/%c set\n",
+                    progname, getLongOptionName(long_options, c), c);
           break;
           
         case 'p':
@@ -407,14 +473,16 @@ main(int argc, char **argv)
           break;
 
         case 'h':
-          printusage();
+          printusage(1);
           exit(1);
 
         case '?':
+          printusage(0);
           break;
           
         default:
           fprintf(stderr, "%s: getopt returned character code 0%o ??\n", progname, c);
+          printusage(0);
         }
     }
 
@@ -424,24 +492,26 @@ main(int argc, char **argv)
   prrflag = (pathname_rr != NULL);
   rrflag = brrflag || errflag || frrflag || prrflag;
 
+#ifdef USE_LIBXML2
   /* XML is default metadata format */
   if (!xflag && !jflag)
     xflag = 1;
+#endif
 
   if (optind < argc)
     {
       while (optind < argc)
-        {
+	{
           if (!oflag)
             {
               oval = (char *)getDirname(argv[optind], FLAG_GET_DIRNAME_ABSOLUTE);
               if (!oval)
                 {
-                  fprintf(stderr, "%s: error: cannot allocate memory for output directory name!\n", progname);
+                  fprintf (stderr, "%s: error: cannot allocate memory for output directory name!\n", progname);
                   exit (1);
                 }
             }
-  
+	  
           struct stat statbuf;
           if (stat(oval, &statbuf) == -1 && errno == ENOENT)
             {
@@ -484,16 +554,18 @@ main(int argc, char **argv)
             free(oval);
         }
 
+#ifdef USE_LIBXML2
       /*
        * Cleanup function for the XML library.
        */
       xmlCleanupParser();
+#endif
       exit(0);
     }
   else
     {
       fprintf(stderr, "%s: error: No image file provided !\n", progname);
-      printusage();
+      printusage(0);
       exit (1);
     }
 
@@ -504,15 +576,26 @@ main(int argc, char **argv)
  * Print usage message
  */
 void
-printusage(void)
+printusage(int withhelp)
 {
   char line[256];
   char *tok = (char *)NULL;
   char twolines = 2;
+  char *str;
 
-  char *str = (char *)malloc(strlen(progusage) +1);
-  assert(str);
-  memcpy(str, progusage, strlen(progusage) +1);
+  if (withhelp)
+  {
+	  str = (char *)malloc(strlen(progusage) +strlen(proghelp) +1);
+	  assert(str);
+	  memcpy(str, progusage, strlen(progusage));
+	  memcpy(str +strlen(progusage), proghelp, strlen(proghelp) +1);
+  }
+  else
+  {
+	  str = (char *)malloc(strlen(progusage) +1);
+	  assert(str);
+	  memcpy(str, progusage, strlen(progusage) +1);
+  }
   
   while ((tok = strtok((char *)str, "\n")) != (char *)NULL)
     {
@@ -679,6 +762,9 @@ extractDeviceTreeImage(FILE *fp, boot_img_hdr *hdr, const char *outdir, const ch
   return(readsz * hdr->dt_size);
 }
 
+/*
+ * Apply the rewrite rules
+ */
 char *
 rewrite(char *str, const char *rule)
 {
@@ -722,7 +808,7 @@ rewrite(char *str, const char *rule)
 }
 
 /*
- *
+ * Apply rewrite rules on the filename of a file
  */
 char *
 rewriteFilename(const char *pathname)
@@ -861,14 +947,20 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
 {
   int rc = 0;
   boot_img_hdr header, *hdr = (boot_img_hdr *)NULL;
-  FILE *imgfp = (FILE *)NULL, *xfp = (FILE *)NULL, *jfp = (FILE *)NULL;
+  FILE *imgfp = (FILE *)NULL,
+#ifdef USE_LIBXML2
+       *xfp = (FILE *)NULL,
+#endif
+       *jfp = (FILE *)NULL;
   off_t offset = 0;
   size_t total_read = 0;
   const char *imgfilename;
   const char *baseName = (const char *)(nval ? nval : imgfile);
+#ifdef USE_LIBXML2
   const char *xml_filename = (const char *)NULL, *json_filename = (const char *)NULL;
   xmlTextWriterPtr xmlWriter;
   xmlDocPtr xmlDoc;
+#endif
   cJSON *jsonDoc;
   char tmp[PATH_MAX+1];
   
@@ -909,6 +1001,9 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                   imgfile);
         }
       
+      if (Vflag)
+	verityVerify(imgfp, hdr);
+
       base_addr = hdr->kernel_addr - kernel_offset;
 
       const char *tmpfname = getImageFilename(baseName, outdir, BOOTIMG_BOOTIMG_FILENAME);
@@ -924,6 +1019,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                   "%s: boot image file name = '%s'!\n",
                   progname, tmpfname);
           
+#ifdef USE_LIBXML2
           /* Create & start XML metadata file */
           if (xflag)
             do
@@ -967,7 +1063,8 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                   xmlTextWriterWriteAttribute(xmlWriter, BOOTIMG_XMLELT_BOOTIMAGEFILE_NAME, tmpfname);
               }
             while (0);
-
+#endif
+	  
           /* Create and start JSON metadata file */
           if (jflag)
             do
@@ -1022,6 +1119,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
               sprintf(boardOsVersionStr, "%d.%d.%d", major, minor, micro);
               sprintf(boardOsPatchLvlStr, "%d-%02d", year, month);
               
+#ifdef USE_LIBXML2
               /* If xml is requested */
               if (xflag)
                 do
@@ -1177,6 +1275,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                       }
                   }
                 while (0);
+#endif
             
               if (jflag)
                 do
@@ -1291,8 +1390,10 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
           const char *tmpfname = getImageFilename(baseName, outdir, BOOTIMG_KERNEL_FILENAME);
           if ((tmpfname = rewriteFilename(tmpfname)))
             {
+#ifdef USE_LIBXML2
               if (xflag)
                 xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, "%s", tmpfname);
+#endif
               if (jflag)
                 cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_KERNELIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
               free((void *)tmpfname);
@@ -1305,8 +1406,10 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                     progname, ramdisk_sz);
           
           tmpfname = getImageFilename(baseName, outdir, BOOTIMG_RAMDISK_FILENAME);
+#ifdef USE_LIBXML2
           if (xflag)
             xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_RAMDISKIMAGEFILE_NAME, "%s", tmpfname);
+#endif
           if (jflag)
             cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_RAMDISKIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
           free((void *)tmpfname);
@@ -1323,8 +1426,10 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                         progname, second_sz);
               
               tmpfname = getImageFilename(baseName, outdir, BOOTIMG_SECOND_LOADER_FILENAME);
+#ifdef USE_LIBXML2
               if (xflag)
                 xmlTextWriterWriteFormatElement(xmlWriter, "secondBootloaderImageFile", "%s", tmpfname);
+#endif
               if (jflag)
                 cJSON_AddItemToObject(jsonDoc, "secondBootloaderImageFile", cJSON_CreateString(tmpfname));
               free((void *)tmpfname);
@@ -1345,8 +1450,10 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
               tmpfname = getImageFilename(baseName, outdir, BOOTIMG_DTB_FILENAME);
               if ((tmpfname = rewriteFilename(tmpfname)))
                 {
+#ifdef USE_LIBXML2
                   if (xflag)
                     xmlTextWriterWriteFormatElement(xmlWriter, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, "%s", tmpfname);
+#endif
                   if (jflag)
                     cJSON_AddItemToObject(jsonDoc, BOOTIMG_XMLELT_DTBIMAGEFILE_NAME, cJSON_CreateString(tmpfname));
                   free((void *)tmpfname);
@@ -1360,6 +1467,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                     "%s: total read: %ld\n",
                     progname, total_read);
           
+#ifdef USE_LIBXML2
           if (xflag)
             do
               {
@@ -1371,6 +1479,7 @@ extractBootImageMetadata(const char *imgfile, const char *outdir)
                 free((void *)xml_filename);
               }
             while (0);
+#endif
           
           if (jflag)
             do
@@ -1490,9 +1599,9 @@ extractRamdiskFiles(const char *fsdir, const char *ramdisk_image)
       
       const char *cwd = get_current_dir_name();
       snprintf(cpio_command,
-    		   MAX_COMMAND_LENGTH,
-    		   "bash -c \"(rm -rf %s >/dev/null 2>&1; mkdir -p %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; zcat %s | cpio -i 2>&1)\"",
-			   fsdir, fsdir, fsdir, ramdisk_image);
+	       MAX_COMMAND_LENGTH,
+	       "bash -c \"(rm -rf %s >/dev/null 2>&1; mkdir -p %s >/dev/null 2>&1; cd %s >/dev/null 2>&1; zcat %s | cpio -i 2>&1)\"",
+	       fsdir, fsdir, fsdir, ramdisk_image);
       if (vflag >= 3)
     	fprintf(stdout, "%s: pipe cpio command = '%s'\n", progname, cpio_command);
       if ((cpio_fp = popen(cpio_command, "r")) != NULL)
@@ -1513,11 +1622,6 @@ extractRamdiskFiles(const char *fsdir, const char *ramdisk_image)
     }
   while (0);
 }
-
-
-#else
-# error Cannot build with your libxml2 that does not have xmlWriter
-#endif /* defined(LIBXML_WRITER_ENABLED) && defined(LIBXML_OUTPUT_ENABLED) */
 
 /* Local Variables:                                                */
 /* mode: C                                                         */

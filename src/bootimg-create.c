@@ -49,14 +49,18 @@
 #include <errno.h>
 #include <error.h>
 
-#include <openssl/sha.h>
-#include <libxml/xmlreader.h>
+#ifdef USE_LIBXML2
+# include <libxml/xmlversion.h>
+# ifdef LIBXML_READER_ENABLED
+#  include <libxml/xmlreader.h>
+# else
+#  error Cannot build with your libxml2 library that does not have xmlReader
+# endif /* LIBXML_READER_ENABLED */
+#endif
 
-#include "bootimg.h"
 #include "cJSON.h"
 
-#ifdef LIBXML_READER_ENABLED
-
+#include "bootimg.h"
 #include "bootimg-priv.h"
 #include "bootimg-utils.h"
 
@@ -101,7 +105,8 @@ char *blankname = (char *)NULL;
  */
 static const char *progusage =
   "usage: %s [options] metadatafile1 [metadatafile2 ...]\n"
-  "       %s --help\n"
+  "       %s --help\n";
+static const char *proghelp =
   "\n"
   "       basic user options:\n"
   "       %s --help -h                     display this message.\n"
@@ -111,7 +116,7 @@ static const char *progusage =
   "       %s                               If omited, one is assumed. More verbose\n"
   "       %s                               flags imply more verbosity.\n"
   "\n"
-  "       options for controling image creation:"
+  "       options for controling image creation:\n"
   "       %s --outdir -o <outdir>          Save potentially big image files in the\n"
   "       %s                               <outdir> directory.\n"
   "       %s                               Impacted images are kernel, ramdisk,\n"
@@ -121,7 +126,7 @@ static const char *progusage =
   "       %s --fs -F [<fsdir>]             Create the cpio archive from the files\n"
   "       %s                               in <fsdir>.\n"
   "\n"
-  "       options for getting extra infos:"
+  "       options for getting extra infos:\n"
   "       %s --identify -i                 display the ID field for this boot image.\n"
   "\n"
   "       %s The metadata files are either xml or json files as created by\n"
@@ -155,19 +160,19 @@ extern int optind;
 /*
  * Forward decl
  */
-static void *loadImage(const char *, size_t *);
-void *my_malloc_fn(size_t);
-void my_free_fn(void *);
-int writeImage(bootimgParsingContext_p);
-void printusage(void);
-void createBootImageFromXmlMetadata(const char *, const char *);
-void createBootImageFromJsonMetadata(const char *, const char *);
-int writePaddingToFd(int, size_t, size_t);
-void writeStringToFile(char *, char *);
-void readerErrorFunc(void *, const char *, xmlParserSeverities, xmlTextReaderLocatorPtr);
-int createBootImageProcessXmlNode(bootimgParsingContext_t *, xmlTextReaderPtr);
-void createBootImageFromXmlMetadata(const char *, const char *);
-void createBootImageFromJsonMetadata(const char *, const char *);
+static void *loadImage                       (const char *, size_t *);
+       void *my_malloc_fn                    (size_t);
+       void  my_free_fn                      (void *);
+       int   writeImage                      (bootimgParsingContext_p);
+       void  printusage                      (int);
+       void  createBootImageFromXmlMetadata  (const char *, const char *);
+       void  createBootImageFromJsonMetadata (const char *, const char *);
+       int   writePaddingToFd                (int, size_t, size_t);
+       void  writeStringToFile               (char *, char *);
+       void  readerErrorFunc                 (void *, const char *, xmlParserSeverities, xmlTextReaderLocatorPtr);
+       int   createBootImageProcessXmlNode   (bootimgParsingContext_t *, xmlTextReaderPtr);
+       void  createBootImageFromXmlMetadata  (const char *, const char *);
+       void  createBootImageFromJsonMetadata (const char *, const char *);
 
 /*
  * Used for cJSON allocations
@@ -670,13 +675,15 @@ main(int argc, char **argv)
   blankname[strlen(progname) +1] = 0;
   memset((void *)blankname, (int)' ', (size_t)strlen(progname));
   oval = get_current_dir_name();
-  
+
+#ifdef USE_LIBXML2
   /*
    * This initialize the libxml2 library and check potential ABI
    * mismatches between the version it was compiled for and the 
    * actual shared library used.
    */
   LIBXML_TEST_VERSION;
+#endif
 
   /*
    * Process options
@@ -763,14 +770,16 @@ main(int argc, char **argv)
           break;
 
         case 'h':
-          printusage();
+          printusage(1);
           exit(1);
 
         case '?':
+          printusage(0);
           break;
           
         default:
           fprintf(stderr, "%s: getopt returned character code 0%o ??\n", progname, c);
+          printusage(0);
         }
     }
 
@@ -791,24 +800,29 @@ main(int argc, char **argv)
           /* 
            * Create image from metadata file according to its type
            */
+#ifdef USE_LIBXML2
           /* Ptr arithm: check filename ends with .xml */
           if (strstr(argv[optind], ".xml") == (argv[optind] + strlen(argv[optind]) - 4))
             createBootImageFromXmlMetadata(argv[optind++], oval);
+#endif
 
+          /* Ptr arithm: check filename ends with .json */
           else if (strstr(argv[optind], ".json") == (argv[optind] + strlen(argv[optind]) - 5))
             createBootImageFromJsonMetadata(argv[optind++], oval);
         }
 
+#ifdef USE_LIBXML2
       /*
        * Cleanup function for the XML library.
        */
       xmlCleanupParser();
+#endif
       exit(0);
     }
   else
     {
       fprintf(stderr, "%s: error: No image file provided !\n", progname);
-      printusage();
+      printusage(0);
       exit (1);
     }
 
@@ -857,14 +871,26 @@ writeStringToFile(char* file, char* string)
  * Print usage message
  */
 void
-printusage(void)
+printusage(int withhelp)
 {
   char line[256];
   char *tok = (char *)NULL;
   char twolines = 2;
+  char *str;
 
-  char *str = (char *)malloc(strlen(progusage) +1);
-  memcpy(str, progusage, strlen(progusage) +1);
+  if (withhelp)
+  {
+	  str = (char *)malloc(strlen(progusage)+ strlen(proghelp) +1);
+	  assert(str);
+	  memcpy(str, progusage, strlen(progusage));
+	  memcpy(str + strlen(progusage), proghelp, strlen(proghelp) +1);
+  }
+  else
+  {
+	  str = (char *)malloc(strlen(progusage) +1);
+	  assert(str);
+	  memcpy(str, progusage, strlen(progusage) +1);
+  }
   
   while ((tok = strtok((char *)str, "\n")) != (char *)NULL)
     {
@@ -883,6 +909,7 @@ printusage(void)
   free((void *)str);
 }
 
+#ifdef USE_LIBXML2
 void readerErrorFunc(void *arg,
                      const char *msg,
                      xmlParserSeverities severity,
@@ -1238,6 +1265,7 @@ createBootImageProcessXmlNode(bootimgParsingContext_t *ctxt, xmlTextReaderPtr xm
   free((void *)localName);
   return rc;
 }
+#endif /* !USE_LIBXML2 */
 
 void
 releaseContextContent(bootimgParsingContext_t *ctxt)
@@ -1267,6 +1295,7 @@ releaseContextContent(bootimgParsingContext_t *ctxt)
   bzero((void *)ctxt, sizeof(bootimgParsingContext_t));
 }
 
+#ifdef USE_LIBXML2
 /*
  * createBootImageFromXmlMetadata
  */
@@ -1346,6 +1375,7 @@ createBootImageFromXmlMetadata(const char *filename, const char *outdir)
       releaseContextContent(&ctxt);
     }
 }
+#endif /* !USE_LIBXML2 */
 
 int
 processJsonDoc(cJSON *jsonDoc, bootimgParsingContext_t *ctxt)
@@ -1591,10 +1621,6 @@ createBootImageFromJsonMetadata(const char *filename, const char *outdir)
         }
     }
 }
-
-#else
-# error Cannot build with your libxml2 library that does not have xmlReader
-#endif /* LIBXML_READER_ENABLED */
 
 /* Local Variables:                                                */
 /* mode: C                                                         */

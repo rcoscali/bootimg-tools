@@ -23,10 +23,10 @@ noinst_HEADERS = \
 	cJSON_Utils.h
 
 
-bootimg_extract_CPPFLAGS = $(XML2_CFLAGS)
+bootimg_extract_CPPFLAGS = $(XML2_CFLAGS) $(OPENSSL_CFLAGS)
 bootimg_extract_CFLAGS = -std=gnu11 $(DEBUG_CFLAGS)
-bootimg_extract_LDADD = $(XML2_LIBS) $(CRYPTO_LIBS) $(M_LIBS)
+bootimg_extract_LDADD = $(XML2_LIBS) $(OPENSSL_LIBS) $(M_LIBS)
 
-bootimg_create_CPPFLAGS = $(XML2_CFLAGS)
+bootimg_create_CPPFLAGS = $(XML2_CFLAGS) $(OPENSSL_CFLAGS)
 bootimg_create_CFLAGS = -std=gnu11 $(DEBUG_CFLAGS)
-bootimg_create_LDADD = $(XML2_LIBS) $(CRYPTO_LIBS) $(M_LIBS)
+bootimg_create_LDADD = $(XML2_LIBS) $(OPENSSL_LIBS) $(M_LIBS)

@@ -18,14 +18,21 @@
 #ifndef __BOOTIMG_UTILS_H__
 #define __BOOTIMG_UTILS_H__
 
-#include <libxml/xmlstring.h>
+#include "config.h"
+
+#ifdef USE_LIBXML2
+# include <libxml/xmlstring.h>
+#endif
+
 #include "bootimg.h"
 
 struct boot_img_hdr *initBootImgHeader(struct boot_img_hdr *);
-const char *getLongOptionName(struct option *, char);
-const char *getImageFilename(const char *, const char *, int);
-const char *getDirname(const char *, uint8_t flags);
-const char *getBasename(const char *, const char *);
+const char          *getLongOptionName(struct option *, char);
+const char          *getImageFilename(const char *, const char *, int);
+const char          *getDirname(const char *, uint8_t);
+const char          *getBasename(const char *, const char *);
+size_t               alignOnPage(size_t, size_t);
+int                  verityVerify(FILE *, struct boot_img_hdr *);
 
 #endif /* __BOOTIMG_UTILS_H__ */
 

@@ -18,6 +18,16 @@
 #ifndef __BOOTIMG_PRIV_H__
 #define __BOOTIMG_PRIV_H__
 
+#ifdef USE_OPENSSL
+# ifndef OPENSSL_NO_SHA256
+#  include <openssl/asn1.h>
+#  include <openssl/asn1t.h>
+#  include <openssl/x509.h>
+# else
+#  error No SHA256 available in this openssl ! It is mandatory ... 
+# endif
+#endif
+
 #include <libxml/xmlstring.h>
 
 /* Defaults for addresses */
@@ -267,6 +277,46 @@ struct _data_context_st
 {
   void *kernel_data, *ramdisk_data, *second_data, *dtb_data;
 };
+
+typedef struct {
+    ASN1_STRING *target;
+    ASN1_INTEGER *length;
+} AuthAttrs;
+
+#ifdef __DO_IMPLEM_ASN1_AUTH_ATTRS__
+ASN1_SEQUENCE(AuthAttrs) = {
+    ASN1_SIMPLE(AuthAttrs, target, ASN1_PRINTABLE),
+    ASN1_SIMPLE(AuthAttrs, length, ASN1_INTEGER)
+} ASN1_SEQUENCE_END(AuthAttrs)
+
+/*
+ * Add implem for AuthAttrs related funcs
+ */
+IMPLEMENT_ASN1_FUNCTIONS(AuthAttrs);
+#endif
+
+typedef struct {
+    ASN1_INTEGER *formatVersion;
+    X509 *certificate;
+    X509_ALGOR *algorithmIdentifier;
+    AuthAttrs *authenticatedAttributes;
+    ASN1_OCTET_STRING *signature;
+} BootSignature;
+
+#ifdef __DO_IMPLEM_ASN1_BOOT_SIGNATURE__
+ASN1_SEQUENCE(BootSignature) = {
+    ASN1_SIMPLE(BootSignature, formatVersion, ASN1_INTEGER),
+    ASN1_SIMPLE(BootSignature, certificate, X509),
+    ASN1_SIMPLE(BootSignature, algorithmIdentifier, X509_ALGOR),
+    ASN1_SIMPLE(BootSignature, authenticatedAttributes, AuthAttrs),
+    ASN1_SIMPLE(BootSignature, signature, ASN1_OCTET_STRING)
+} ASN1_SEQUENCE_END(BootSignature)
+
+/*
+ * Add implem for BootSignature related funcs
+ */
+IMPLEMENT_ASN1_FUNCTIONS(BootSignature);
+#endif
 
 #endif /* __BOOTIMG_PRIV_H__ */
 

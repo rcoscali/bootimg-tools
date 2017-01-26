@@ -93,16 +93,49 @@ AC_SUBST([M_LIBS])
 
 # Modules version requirements
 LIBXML_2_0_REQUIRED_MIN_VERSION=2.9.0
-LIBCRYPTO_REQUIRED_MIN_VERSION=1.0.2g
+OPENSSL_REQUIRED_MIN_VERSION=1.0.2g
 
 # XML2
+AC_ARG_WITH([libxml2],
+	    AS_HELP_STRING([--with-libxml2], [use libxml2]),
+	    [use_libxml2=$withval])
 PKG_CHECK_MODULES([XML2],
-                  libxml-2.0 >= $LIBXML_2_0_REQUIRED_MIN_VERSION)
+	          libxml-2.0 >= $LIBXML_2_0_REQUIRED_MIN_VERSION,
+	          use_libxml2=yes)
+if test "x$use_libxml2" = "xno"; then
+   AC_MSG_WARN(libxml2 is not used or was not found: some of the features will not be available)
+elif test "x$use_libxml2" != "xyes" -a "x$use_libxml2" != "xno"; then
+   USE_LIBXML2=1
+   XML2_CFLAGS="-I$use_libxml2/include"
+   XML2_LIBS="-L$use_libxml2/lib -lxml2"
+   AC_DEFINE([USE_LIBXML2], [], [uses libxml2])
+   AC_DEFINE([XML2_CFLAGS], [], [xml2 cflags])
+   AC_DEFINE([XML2_LIBS], [], [xml2 libs])
+else
+   USE_LIBXML2=1
+   AC_DEFINE([USE_LIBXML2], [], [uses libxml2])
+fi
 
-
-# CRYPTO
-PKG_CHECK_MODULES([CRYPTO],
-                  libcrypto >= $LIBCRYPTO_REQUIRED_MIN_VERSION)
+# OPENSSL
+AC_ARG_WITH([openssl],
+            AS_HELP_STRING([--with-openssl], [use openssl]),
+	    [use_openssl=$withval])
+PKG_CHECK_MODULES([OPENSSL],
+                  openssl >= $OPENSSL_REQUIRED_MIN_VERSION,
+		  use_openssl=yes)
+if test "x$use_openssl" = "xno"; then
+   AC_MSG_WARN(openssl is not used or was not found: some of the features will not be available)
+elif test "x$use_openssl" != "xyes" -a "x$use_openssl" != "xno"; then
+   USE_OPENSSL=1
+   OPENSSL_CFLAGS="-I$use_openssl/include"
+   OPENSSL_LIBS="-L$use_openssl/lib -lssl -lcrypto"
+   AC_DEFINE([USE_OPENSSL], [], [uses openssl])
+   AC_DEFINE([OPENSSL_CFLAGS], [], [openssl cflags])
+   AC_DEFINE([OPENSSL_LIBS], [], [openssl libs])
+else
+   USE_OPENSSL=1
+   AC_DEFINE([USE_OPENSSL], [], [uses openssl])
+fi
 
 AC_DEFINE([_GNU_SOURCE], [], [uses GNU sources for libraries])
 AC_DEFINE([__USE_GNU], [], [uses GNU implems])
